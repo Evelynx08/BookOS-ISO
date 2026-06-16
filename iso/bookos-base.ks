@@ -12,7 +12,7 @@ services --enabled=NetworkManager,sshd,bluetooth,sddm
 bootloader --location=mbr --append="rhgb quiet rd.live.image"
 zerombr
 clearpart --all --initlabel
-autopart --type=plain
+autopart --type=btrfs
 
 # Live user
 user --name=liveuser --groups=wheel,audio,video --gecos="Live User"

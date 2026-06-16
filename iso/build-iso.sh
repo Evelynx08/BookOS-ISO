@@ -15,7 +15,7 @@ case "$CHANNEL" in stable|beta|dev) ;; *) echo "invalid channel"; exit 1;; esac
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 WORKDIR="${WORKDIR:-/var/tmp/bookos-iso-${CHANNEL}}"
 OUTDIR="${OUTDIR:-$PWD}"
-RELEASEVER="${RELEASEVER:-41}"   # Fedora version base
+RELEASEVER="${RELEASEVER:-44}"   # Fedora version base (44 = dnf5 default)
 
 mkdir -p "$WORKDIR"
 rm -rf "$WORKDIR"/results 2>/dev/null || true
