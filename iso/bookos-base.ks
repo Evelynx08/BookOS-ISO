@@ -20,6 +20,9 @@ user --name=liveuser --groups=wheel,audio,video --gecos="Live User"
 reboot --eject
 
 # ── Repos ─────────────────────────────────────────────────────────────────
+# Base install source — must be declared with `url` (not `repo`), or lorax
+# errors: "repo can only be used within the url install method".
+url --mirrorlist=https://mirrors.fedoraproject.org/metalink?repo=fedora-$releasever&arch=$basearch
 repo --name=fedora --mirrorlist=https://mirrors.fedoraproject.org/metalink?repo=fedora-$releasever&arch=$basearch
 repo --name=updates --mirrorlist=https://mirrors.fedoraproject.org/metalink?repo=updates-released-f$releasever&arch=$basearch
 repo --name=rpmfusion-free --mirrorlist=https://mirrors.rpmfusion.org/metalink?repo=free-fedora-$releasever&arch=$basearch
