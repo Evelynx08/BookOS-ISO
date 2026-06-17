@@ -67,10 +67,14 @@ KS_IN="$SCRIPT_DIR/bookos-$CHANNEL.ks"
 KS_RAW="$WORKDIR/bookos-raw.ks"
 ksflatten -c "$KS_IN" -o "$KS_RAW" 2>/dev/null || cp "$KS_IN" "$KS_RAW"
 
-# Substitute simple vars
+# Substitute simple vars. __RELEASEVER__/__BASEARCH__ are made literal in the
+# bookos repo URL (anaconda doesn't reliably expand $releasever in a kickstart
+# `repo --baseurl`, which left bookos-* as "No match" during the build).
 sed -e "s/__BOOKOS_NAME__/$OS_NAME/g" \
     -e "s/__BOOKOS_VERSION__/$VERSION/g" \
     -e "s/__BOOKOS_CHANNEL__/$CHANNEL/g" \
+    -e "s/__RELEASEVER__/$RELEASEVER/g" \
+    -e "s/__BASEARCH__/x86_64/g" \
     "$KS_RAW" > "$KS_RAW.sub"
 # Replace the optional-apps placeholder line with the (possibly empty) list,
 # keeping the package section valid (one package per line, or removed).
