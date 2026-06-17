@@ -50,7 +50,6 @@ dracut-config-generic
 # (No dnf snapper plugin: it isn't packaged on Fedora/dnf5; BookOS Settings
 #  takes the snapshot itself in apply_bookos_release.)
 snapper
-grub-btrfs
 inotify-tools
 
 # BookOS umbrella package (Requires: pulls everything else)
@@ -77,12 +76,12 @@ anaconda
 anaconda-live
 anaconda-install-env-deps
 
+# Replace only the artwork — bookos-branding Conflicts these and provides the
+# BookOS logos. We KEEP fedora-release/-common: they provide `system-release`
+# (required by `setup`), and excluding them broke the whole dependency tree.
+# BookOS identity (os-release, hostname, theme) is applied in %post.
 -fedora-logos
--fedora-release
--fedora-release-common
--fedora-release-kde
 -generic-logos
--generic-release
 %end
 
 # ── Post-install: branding overrides ──────────────────────────────────────
