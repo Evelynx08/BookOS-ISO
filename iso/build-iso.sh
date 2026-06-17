@@ -103,7 +103,6 @@ livemedia-creator \
     --resultdir "$WORKDIR/results" \
     --project "$OS_NAME" \
     --releasever "$RELEASEVER" \
-    --title "$OS_NAME $VERSION $CHANNEL" \
     --volid "$(echo "$SLUG" | cut -c1-11)-$VERSION"
 
 mv "$WORKDIR/results/$ISO_NAME" "$OUTDIR/"

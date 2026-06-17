@@ -11,14 +11,16 @@ CHANNEL="${1:-dev}"
 VERSION="${2:-0.6}"
 NAS="${NAS:-evelynx08@A5-NAS}"
 REPO="/var/www/html/public/repo/fedora/44/x86_64/${CHANNEL}"
-RPMS="$HOME/rpmbuild/RPMS/noarch"
+# Resolver el home real aunque se ejecute con sudo (evita /root/rpmbuild vacío)
+USER_HOME="${SUDO_USER:+/home/$SUDO_USER}"
+RPMS="${RPMS:-${USER_HOME:-$HOME}/rpmbuild/RPMS/noarch}"
 
 echo "→ Canal: $CHANNEL · Versión: $VERSION · Destino: $NAS:$REPO"
 
 # RPMs a subir (los que existan para esta versión)
 shopt -s nullglob
 files=("$RPMS"/bookos-{branding,widgets,plasma-theme,look-and-feel,meta,settings,viewer,player}-"$VERSION"-*.rpm)
-[ ${#files[@]} -gt 0 ] || { echo "✗ no hay RPMs $VERSION en $RPMS"; exit 1; }
+[ ${#files[@]} -gt 0 ] || { echo "✗ no hay RPMs $VERSION en $RPMS"; echo "  (si están en otra ruta: RPMS=/ruta ./publish-0.6.sh $CHANNEL $VERSION)"; exit 1; }
 
 echo "→ Subiendo ${#files[@]} RPMs a /tmp del NAS…"
 scp "${files[@]}" "$NAS:/tmp/"
