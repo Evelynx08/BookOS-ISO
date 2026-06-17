@@ -74,6 +74,7 @@ if [ -f "$THEME/anaconda-webui-bookos.css" ]; then
     for idx in $(find /usr/share/cockpit/anaconda-webui /usr/share/anaconda -name index.html -path '*anaconda-webui*' 2>/dev/null); do
         dir=$(dirname "$idx")
         cp -f "$THEME/anaconda-webui-bookos.css" "$dir/bookos.css" 2>/dev/null || true
+        cp -f /usr/share/anaconda/bookos/pixmaps/bookos-logo.svg "$dir/bookos-logo.svg" 2>/dev/null || true
         # inject the stylesheet link once
         if ! grep -q 'bookos.css' "$idx" 2>/dev/null; then
             sed -i 's#</head>#    <link rel="stylesheet" href="bookos.css">\n</head>#' "$idx" 2>/dev/null || true
