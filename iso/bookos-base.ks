@@ -23,8 +23,8 @@ reboot --eject
 repo --name=fedora --mirrorlist=https://mirrors.fedoraproject.org/metalink?repo=fedora-$releasever&arch=$basearch
 repo --name=updates --mirrorlist=https://mirrors.fedoraproject.org/metalink?repo=updates-released-f$releasever&arch=$basearch
 repo --name=rpmfusion-free --mirrorlist=https://mirrors.rpmfusion.org/metalink?repo=free-fedora-$releasever&arch=$basearch
-# BookOS repo — overridden in stable/beta/dev kickstarts.
-repo --name=bookos --baseurl=https://bookos.es/repo/fedora/$releasever/$basearch/stable/
+# BookOS repo is defined by the per-channel kickstart (stable/beta/dev.ks),
+# not here, to avoid a duplicate "bookos" repo definition.
 
 # ── Packages ──────────────────────────────────────────────────────────────
 %packages
@@ -34,6 +34,9 @@ repo --name=bookos --baseurl=https://bookos.es/repo/fedora/$releasever/$basearch
 @hardware-support
 @multimedia
 kernel-modules-extra
+# Required by livemedia-creator to produce a bootable live ISO
+dracut-live
+dracut-config-generic
 
 # Snapshot / rollback stack (btrfs) — lets BookOS Settings snapshot before
 # every release upgrade and roll back from GRUB if something breaks.
