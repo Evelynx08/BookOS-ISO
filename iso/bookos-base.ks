@@ -10,9 +10,11 @@ network --bootproto=dhcp --device=link --activate --onboot=on
 services --enabled=NetworkManager,sshd,bluetooth,sddm
 
 bootloader --location=mbr --append="rhgb quiet rd.live.image"
-zerombr
-clearpart --all --initlabel
-autopart --type=btrfs
+# Live image rootfs sizing for livemedia-creator. This is the SIZE OF THE LIVE
+# IMAGE being built, not the installed system — Anaconda chooses the target
+# disk layout at install time (Fedora's automatic install defaults to btrfs,
+# which is what we want for snapshots).
+part / --size=20000 --fstype="ext4"
 
 # Live user
 user --name=liveuser --groups=wheel,audio,video --gecos="Live User"
