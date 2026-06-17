@@ -32,7 +32,9 @@ repo --name=rpmfusion-free --mirrorlist=https://mirrors.rpmfusion.org/metalink?r
 # not here, to avoid a duplicate "bookos" repo definition.
 
 # ── Packages ──────────────────────────────────────────────────────────────
-%packages
+# --ignoremissing: skip a package that isn't found instead of aborting the
+# whole build (safety net for optional/renamed packages across Fedora versions).
+%packages --ignoremissing
 @^kde-desktop-environment
 @standard
 @base-x
@@ -45,8 +47,9 @@ dracut-config-generic
 
 # Snapshot / rollback stack (btrfs) — lets BookOS Settings snapshot before
 # every release upgrade and roll back from GRUB if something breaks.
+# (No dnf snapper plugin: it isn't packaged on Fedora/dnf5; BookOS Settings
+#  takes the snapshot itself in apply_bookos_release.)
 snapper
-python3-dnf-plugin-snapper
 grub-btrfs
 inotify-tools
 
@@ -58,7 +61,6 @@ bookos-calc
 bookos-clock
 bookos-notepad
 bookos-branding
-bookos-wallpapers
 bookos-look-and-feel
 # Optional apps — substituted by build-iso.sh when "all apps" is requested.
 __BOOKOS_OPTIONAL_APPS__
