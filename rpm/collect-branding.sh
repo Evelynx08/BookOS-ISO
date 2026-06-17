@@ -10,7 +10,7 @@ VERSION="${1:-0.6}"
 # Repo root = two levels up from this script (…/BookOS/BookOS-ISO/rpm → …/BookOS)
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 STAGE="$(mktemp -d)/bookos-branding-${VERSION}"
-mkdir -p "$STAGE"/{logos,wallpapers,sddm-theme,plymouth-theme,lockscreen}
+mkdir -p "$STAGE"/{logos,wallpapers,sddm-theme,plymouth-theme,lockscreen,anaconda}
 
 say(){ printf '  %s\n' "$*"; }
 warn(){ printf '  ⚠ %s\n' "$*" >&2; }
@@ -85,6 +85,15 @@ logo.sprite.SetX(Window.GetWidth()/2 - logo.image.GetWidth()/2);
 logo.sprite.SetY(Window.GetHeight()/2 - logo.image.GetHeight()/2);
 EOF
     [ -f "$STAGE/logos/bookos.png" ] && cp "$STAGE/logos/bookos.png" "$STAGE/plymouth-theme/logo.png" || true
+fi
+
+# ── Anaconda installer branding (pixmaps + WebUI CSS) ───────────────────
+if [ -d "$ROOT/BookOS-Anaconda" ]; then
+    [ -d "$ROOT/BookOS-Anaconda/pixmaps" ] && cp -r "$ROOT/BookOS-Anaconda/pixmaps" "$STAGE/anaconda/pixmaps"
+    [ -d "$ROOT/BookOS-Anaconda/theme" ]   && cp -r "$ROOT/BookOS-Anaconda/theme"   "$STAGE/anaconda/theme"
+    say "anaconda: pixmaps + theme CSS"
+else
+    warn "no BookOS-Anaconda dir — installer keeps Fedora look"
 fi
 
 # ── Pack ────────────────────────────────────────────────────────────────

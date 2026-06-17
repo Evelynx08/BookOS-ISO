@@ -9,9 +9,10 @@ BuildArch:      noarch
 # ── System identity / look: PINNED to this exact release (macOS model) ──
 # A version bump forces every visual piece to the SAME version atomically,
 # so upgrading 0.5 → 0.6 brings the whole redesign in one dnf transaction.
-Requires:       bookos-branding   = %{version}
-Requires:       bookos-widgets    = %{version}
-# (añadir al empaquetar: bookos-sddm, bookos-plasma-theme, bookos-wallpapers = %{version})
+Requires:       bookos-branding     = %{version}
+Requires:       bookos-widgets      = %{version}
+Requires:       bookos-plasma-theme = %{version}
+# (sddm + wallpapers se entregan dentro de bookos-branding)
 
 # ── Apps: con versión propia, solo necesitan un mínimo (no atadas al salto) ──
 Requires:       bookos-settings   >= 0.5.0

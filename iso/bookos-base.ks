@@ -35,6 +35,13 @@ repo --name=bookos --baseurl=https://bookos.es/repo/fedora/$releasever/$basearch
 @multimedia
 kernel-modules-extra
 
+# Snapshot / rollback stack (btrfs) — lets BookOS Settings snapshot before
+# every release upgrade and roll back from GRUB if something breaks.
+snapper
+python3-dnf-plugin-snapper
+grub-btrfs
+inotify-tools
+
 # BookOS umbrella package (Requires: pulls everything else)
 bookos-meta
 bookos-settings
@@ -108,6 +115,25 @@ plymouth-set-default-theme bookos -R || true
 # Update icon cache after BookOS icons installed
 gtk-update-icon-cache -f /usr/share/icons/hicolor 2>/dev/null || true
 kbuildsycoca6 --noincremental 2>/dev/null || true
+
+# ── Theme the Anaconda WebUI installer (guaranteed: runs after every package
+# is installed, unlike the RPM %post which may run before anaconda-webui). ──
+THEME=/usr/share/anaconda/bookos/theme
+if [ -f "$THEME/anaconda-webui-bookos.css" ]; then
+  for idx in $(find /usr/share/cockpit/anaconda-webui /usr/share/anaconda -name index.html -path '*anaconda-webui*' 2>/dev/null); do
+    d=$(dirname "$idx")
+    cp -f "$THEME/anaconda-webui-bookos.css" "$d/bookos.css" || true
+    grep -q bookos.css "$idx" || sed -i 's#</head>#<link rel="stylesheet" href="bookos.css">\n</head>#' "$idx" || true
+  done
+fi
+[ -f "$THEME/userChrome.css" ] && for fx in /usr/share/anaconda/firefox-theme/live/chrome /usr/share/anaconda/firefox-theme/default/chrome; do mkdir -p "$fx" && cp -f "$THEME/userChrome.css" "$fx/userChrome.css"; done 2>/dev/null || true
+
+# Snapper: create the root config so pre/post snapshots work out of the box.
+# (|| true: harmless if the subvolume layout already has it.)
+snapper -c root create-config / 2>/dev/null || true
+# Regenerate GRUB so grub-btrfs adds the "BookOS snapshots" submenu.
+grub2-mkconfig -o /boot/grub2/grub.cfg 2>/dev/null || true
+systemctl enable grub-btrfsd 2>/dev/null || true
 
 # Cleanup
 dnf clean all
