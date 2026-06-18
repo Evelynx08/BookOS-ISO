@@ -44,13 +44,14 @@ kernel-modules-extra
 # Required by livemedia-creator to produce a bootable live ISO
 dracut-live
 dracut-config-generic
-# GRUB bootloader bits for the ISO (BIOS El Torito + UEFI) — without grub2-pc
-# the build fails: "cannot open .../i386-pc/moddep.lst".
-grub2-pc
+# ISO bootloader bits (lorax builds the El Torito BIOS + UEFI boot at compose
+# time; these provide the grub2 modules it needs, mirroring Fedora's own live
+# kickstarts). Without grub2-pc-modules: "cannot open .../i386-pc/moddep.lst".
 grub2-pc-modules
 grub2-efi-x64
-grub2-tools
+grub2-efi-x64-cdboot
 shim-x64
+syslinux
 
 # Snapshot / rollback stack (btrfs) — lets BookOS Settings snapshot before
 # every release upgrade and roll back from GRUB if something breaks.
@@ -83,12 +84,12 @@ anaconda
 anaconda-live
 anaconda-install-env-deps
 
-# Replace only the artwork — bookos-branding Conflicts these and provides the
-# BookOS logos. We KEEP fedora-release/-common: they provide `system-release`
-# (required by `setup`), and excluding them broke the whole dependency tree.
-# BookOS identity (os-release, hostname, theme) is applied in %post.
--fedora-logos
--generic-logos
+# NOTE: we DON'T exclude fedora-logos/generic-logos here. They provide
+# `system-logos`, required by breeze-icon-theme and the whole KDE stack; while
+# the bookos repo isn't yet pulled into the build, excluding them breaks the
+# entire dependency tree. BookOS identity is applied in %post (os-release etc.).
+# Once bookos-branding installs from the repo (it Provides system-logos and
+# Conflicts fedora-logos), re-add the exclusions.
 %end
 
 # ── Post-install: branding overrides ──────────────────────────────────────
@@ -235,6 +236,36 @@ cat > /etc/sddm.conf.d/bookos-theme.conf <<'EOF'
 Current=bookos
 CursorTheme=Apple-cursors
 EOF
+
+# Live session: liveuser must log in with no password. Without livesys-scripts
+# the pre-created liveuser has a locked password and SDDM prompts for one that
+# nobody knows. Clear it and auto-login straight to the desktop. Pick the
+# Wayland plasma session if present, else X11.
+passwd -d liveuser 2>/dev/null || true
+LIVE_SESSION=plasma
+[ -f /usr/share/wayland-sessions/plasma.desktop ] || LIVE_SESSION=plasmax11
+cat > /etc/sddm.conf.d/zz-live-autologin.conf <<EOF
+[Autologin]
+User=liveuser
+Session=$LIVE_SESSION
+Relogin=true
+EOF
+
+# ── BookOS lockscreen ───────────────────────────────────────────────────
+# Replicates bookos-settings' install_lockscreen_theme: overwrite the Plasma
+# shell lockscreen with the staged BookOS QML so the live session AND fresh
+# installs show the BookOS lockscreen out of the box (instead of plain Breeze),
+# without the user having to flip the toggle in BookOS Settings.
+LS_SRC=/usr/share/bookos-settings/lockscreen
+LS_DEST=/usr/share/plasma/shells/org.kde.plasma.desktop/contents/lockscreen
+if [ -d "$LS_SRC" ] && [ -d "$LS_DEST" ]; then
+    mkdir -p "$LS_DEST/.backup"
+    for f in MainBlock.qml LockScreenUi.qml BookBar.qml MediaControls.qml; do
+        [ -f "$LS_DEST/$f" ] && cp -f "$LS_DEST/$f" "$LS_DEST/.backup/$f" 2>/dev/null || true
+        [ -f "$LS_SRC/$f" ]  && cp -f "$LS_SRC/$f"  "$LS_DEST/$f"        2>/dev/null || true
+    done
+    touch "$LS_DEST/.bookos-installed"
+fi
 
 # Plymouth (boot splash) — branding RPM should install /usr/share/plymouth/themes/bookos
 plymouth-set-default-theme bookos -R || true
