@@ -34,9 +34,13 @@ else
 fi
 
 # ── Wallpapers ──────────────────────────────────────────────────────────
-if [ -d "$ROOT/BookOS-Wallpapers/Wallpapers-1.0" ]; then
-    cp -r "$ROOT/BookOS-Wallpapers/Wallpapers-1.0/." "$STAGE/wallpapers/"
-    say "wallpapers: copied Dark + Light"
+# Pick the highest-versioned Wallpapers-* dir (was hardcoded to 1.0, but the
+# repo ships Wallpapers-0.6); fall back to a bare Wallpapers/ if present.
+WP_DIR="$(ls -d "$ROOT"/BookOS-Wallpapers/Wallpapers-* 2>/dev/null | sort -V | tail -n1)"
+[ -d "$WP_DIR" ] || WP_DIR="$ROOT/BookOS-Wallpapers/Wallpapers"
+if [ -d "$WP_DIR" ]; then
+    cp -r "$WP_DIR/." "$STAGE/wallpapers/"
+    say "wallpapers: copied Dark + Light (from $(basename "$WP_DIR"))"
 else
     warn "no wallpapers dir found"
 fi
