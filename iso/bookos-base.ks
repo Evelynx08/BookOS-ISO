@@ -69,6 +69,7 @@ bookos-clock
 bookos-notepad
 bookos-branding
 bookos-look-and-feel
+bookos-desktop-defaults
 # Optional apps — substituted by build-iso.sh when "all apps" is requested.
 __BOOKOS_OPTIONAL_APPS__
 
@@ -122,11 +123,13 @@ ln -sf /etc/os-release /usr/lib/os-release
 # real Galaxy Book hardware so the installer shows e.g. "book5-pro").
 echo "bookos" > /etc/hostname
 
-# Ensure the live user also boots into the BookOS desktop (new users get it
-# from /etc/skel; the pre-created liveuser needs an explicit copy).
-if [ -f /etc/skel/.config/plasma-org.kde.plasma.desktop-appletsrc ] && [ -d /home/liveuser ]; then
-    mkdir -p /home/liveuser/.config
-    cp /etc/skel/.config/plasma-org.kde.plasma.desktop-appletsrc /home/liveuser/.config/
+# Ensure the live user boots into the FULL BookOS appearance. New users inherit
+# /etc/skel automatically, but liveuser is pre-created by the `user` directive
+# before the RPMs populate skel, so copy the whole skel config across (panel
+# layout + kdeglobals/plasmarc/kwinrc/kcminputrc/Kvantum/gtk from
+# bookos-desktop-defaults). Without this the live session shows plain Breeze.
+if [ -d /etc/skel/.config ] && [ -d /home/liveuser ]; then
+    cp -a /etc/skel/.config /home/liveuser/ 2>/dev/null || true
     chown -R liveuser:liveuser /home/liveuser/.config 2>/dev/null || true
 fi
 
@@ -266,6 +269,22 @@ if [ -d "$LS_SRC" ] && [ -d "$LS_DEST" ]; then
     done
     touch "$LS_DEST/.bookos-installed"
 fi
+
+# ── Installer launcher on the live desktop ──────────────────────────────
+# Without livesys-scripts nothing places the "Install to Hard Drive" icon on
+# the live user's desktop. Copy anaconda's launcher there (and to /etc/skel so
+# it survives the liveuser home copy), marked trusted so Plasma runs it.
+for LAUNCH in /usr/share/applications/liveinst.desktop /usr/share/applications/anaconda.desktop; do
+    [ -f "$LAUNCH" ] || continue
+    for DESK in /etc/skel/Desktop /home/liveuser/Desktop; do
+        mkdir -p "$DESK"
+        cp -f "$LAUNCH" "$DESK/" 2>/dev/null || true
+        chmod +x "$DESK/$(basename "$LAUNCH")" 2>/dev/null || true
+        # KDE: mark executable desktop files as trusted to skip the warning
+        kwriteconfig6 --file "$DESK/$(basename "$LAUNCH")" --group "Desktop Entry" --key "X-KDE-AuthorizeExecution" "true" 2>/dev/null || true
+    done
+done
+chown -R liveuser:liveuser /home/liveuser/Desktop 2>/dev/null || true
 
 # Plymouth (boot splash) — branding RPM should install /usr/share/plymouth/themes/bookos
 plymouth-set-default-theme bookos -R || true

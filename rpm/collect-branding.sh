@@ -93,9 +93,14 @@ fi
 
 # ── Anaconda installer branding (pixmaps + WebUI CSS) ───────────────────
 if [ -d "$ROOT/BookOS-Anaconda" ]; then
-    [ -d "$ROOT/BookOS-Anaconda/pixmaps" ] && cp -r "$ROOT/BookOS-Anaconda/pixmaps" "$STAGE/anaconda/pixmaps"
-    [ -d "$ROOT/BookOS-Anaconda/theme" ]   && cp -r "$ROOT/BookOS-Anaconda/theme"   "$STAGE/anaconda/theme"
-    say "anaconda: pixmaps + theme CSS"
+    [ -d "$ROOT/BookOS-Anaconda/pixmaps" ]   && cp -r "$ROOT/BookOS-Anaconda/pixmaps"   "$STAGE/anaconda/pixmaps"
+    [ -d "$ROOT/BookOS-Anaconda/theme" ]     && cp -r "$ROOT/BookOS-Anaconda/theme"     "$STAGE/anaconda/theme"
+    # product.d/bookos.conf drives the installer's btrfs default partitioning
+    # AND the official WebUI stylesheet — without it Anaconda falls back to
+    # ext4 + plain look.
+    [ -d "$ROOT/BookOS-Anaconda/product.d" ] && cp -r "$ROOT/BookOS-Anaconda/product.d" "$STAGE/anaconda/product.d"
+    [ -d "$ROOT/BookOS-Anaconda/addon" ]     && cp -r "$ROOT/BookOS-Anaconda/addon"     "$STAGE/anaconda/addon"
+    say "anaconda: pixmaps + theme CSS + product.d + addon"
 else
     warn "no BookOS-Anaconda dir — installer keeps Fedora look"
 fi

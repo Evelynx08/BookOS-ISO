@@ -112,6 +112,37 @@ livemedia-creator \
 mv "$WORKDIR/results/$ISO_NAME" "$OUTDIR/"
 echo "[✓] $OUTDIR/$ISO_NAME"
 
+# ── Fix boot-menu title ("BookOS 44" → "BookOS <version>") ────────────────
+# lorax stamps the GRUB/isolinux menu labels as "<project> <releasever>", so
+# the live boot menu reads "BookOS 44" (the Fedora base). Rewrite those labels
+# to the BookOS version. Needs xorriso to remaster in place; skipped (with a
+# note) if it's missing — purely cosmetic, never fatal.
+if command -v xorriso >/dev/null; then
+    ISO_PATH="$OUTDIR/$ISO_NAME"
+    EXDIR="$WORKDIR/bootcfg"; rm -rf "$EXDIR"; mkdir -p "$EXDIR"
+    # Boot config files that may carry the title (paths vary by Fedora spin).
+    CFGS="/isolinux/isolinux.cfg /EFI/BOOT/grub.cfg /EFI/BOOT/BOOT.conf /boot/grub2/grub.cfg"
+    CHANGED=0
+    for c in $CFGS; do
+        if xorriso -osirrox on -indev "$ISO_PATH" -extract "$c" "$EXDIR/$(basename "$c")" 2>/dev/null; then
+            # Only on menu-title lines (label/menuentry/title), so kernel args
+            # that may contain "$RELEASEVER" are left untouched. Cover the exact
+            # project name and a lowercase slug variant.
+            sed -i -E "/(menu label|menuentry|^\s*title|set default_title|^label )/I {
+                s/$OS_NAME $RELEASEVER/$OS_NAME $VERSION/g
+                s/$SLUG $RELEASEVER/$SLUG $VERSION/Ig
+            }" "$EXDIR/$(basename "$c")"
+            xorriso -boot_image any keep -dev "$ISO_PATH" \
+                -update "$EXDIR/$(basename "$c")" "$c" 2>/dev/null && CHANGED=1
+        fi
+    done
+    [ "$CHANGED" = 1 ] && echo "[✓] Menú GRUB: '$OS_NAME $RELEASEVER' → '$OS_NAME $VERSION'" \
+                       || echo "[i] No se encontró el título en los configs de arranque (sin cambios)."
+else
+    echo "[i] xorriso no instalado: el menú de arranque seguirá diciendo '$OS_NAME $RELEASEVER'."
+    echo "    Para corregirlo: sudo dnf install xorriso  y vuelve a construir."
+fi
+
 # ── Sign (minisign) ──────────────────────────────────────────────────────
 if [ "${SIGN:-1}" != "0" ] && command -v minisign >/dev/null && [ -f /etc/bookos/minisign.key ]; then
     minisign -Sm "$OUTDIR/$ISO_NAME" -s /etc/bookos/minisign.key

@@ -19,7 +19,7 @@ echo "→ Canal: $CHANNEL · Versión: $VERSION · Destino: $NAS:$REPO"
 
 # RPMs a subir (los que existan para esta versión)
 shopt -s nullglob
-files=("$RPMS"/bookos-{branding,widgets,plasma-theme,look-and-feel,meta,settings,viewer,player}-"$VERSION"-*.rpm)
+files=("$RPMS"/bookos-{branding,widgets,plasma-theme,look-and-feel,desktop-defaults,meta,settings,viewer,player}-"$VERSION"-*.rpm)
 [ ${#files[@]} -gt 0 ] || { echo "✗ no hay RPMs $VERSION en $RPMS"; echo "  (si están en otra ruta: RPMS=/ruta ./publish-0.6.sh $CHANNEL $VERSION)"; exit 1; }
 
 echo "→ Subiendo ${#files[@]} RPMs a /tmp del NAS…"

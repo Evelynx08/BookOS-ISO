@@ -50,6 +50,29 @@ if [ -d anaconda ]; then
     cp -r anaconda/* %{buildroot}/usr/share/anaconda/bookos/
 fi
 
+# Anaconda product profile — THIS is what makes the installer default to btrfs
+# (file_system_type + btrfs partitioning) and load the BookOS WebUI stylesheet.
+# Anaconda reads it from /usr/share/anaconda/product.d/ at runtime.
+if [ -f anaconda/product.d/bookos.conf ]; then
+    install -Dm644 anaconda/product.d/bookos.conf \
+        %{buildroot}/usr/share/anaconda/product.d/bookos.conf
+fi
+# WebUI stylesheet at the path referenced by bookos.conf's webui_stylesheet key.
+if [ -f anaconda/theme/anaconda-webui-bookos.css ]; then
+    install -Dm644 anaconda/theme/anaconda-webui-bookos.css \
+        %{buildroot}/usr/share/anaconda/cockpit/anaconda-webui/preload/bookos.css
+fi
+# GTK custom_stylesheet path referenced by bookos.conf (legacy fallback UI).
+if [ -f anaconda/theme/anaconda-bookos.css ]; then
+    install -Dm644 anaconda/theme/anaconda-bookos.css \
+        %{buildroot}/usr/share/anaconda/pixmaps/bookos/anaconda-bookos.css
+fi
+# Welcome addon referenced by the product profile.
+if [ -d anaconda/addon/org_bookos_welcome ]; then
+    install -dm755 %{buildroot}/usr/share/anaconda/addons
+    cp -r anaconda/addon/org_bookos_welcome %{buildroot}/usr/share/anaconda/addons/
+fi
+
 %files
 /usr/share/icons/hicolor/scalable/apps/start-here.svg
 /usr/share/pixmaps/bookos.svg
@@ -59,6 +82,11 @@ fi
 /usr/share/plymouth/themes/bookos/
 /usr/share/bookos-settings/lockscreen/
 /usr/share/anaconda/bookos/
+/usr/share/anaconda/product.d/bookos.conf
+%dir /usr/share/anaconda/cockpit/anaconda-webui/preload
+/usr/share/anaconda/cockpit/anaconda-webui/preload/bookos.css
+/usr/share/anaconda/pixmaps/bookos/anaconda-bookos.css
+/usr/share/anaconda/addons/org_bookos_welcome/
 
 %post
 plymouth-set-default-theme bookos -R 2>/dev/null || true

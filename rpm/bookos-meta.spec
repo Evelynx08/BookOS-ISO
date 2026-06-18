@@ -13,6 +13,9 @@ Requires:       bookos-branding      = %{version}
 Requires:       bookos-widgets       = %{version}
 Requires:       bookos-plasma-theme  = %{version}
 Requires:       bookos-look-and-feel = %{version}
+# Full appearance bundle (global theme, icons, cursor, fonts, GTK + /etc/skel
+# applied config) — without this the desktop falls back to plain Breeze.
+Requires:       bookos-desktop-defaults = %{version}
 # (sddm + wallpapers se entregan dentro de bookos-branding)
 
 # ── Apps: con versión propia, solo necesitan un mínimo (no atadas al salto) ──
