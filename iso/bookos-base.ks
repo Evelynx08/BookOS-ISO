@@ -7,7 +7,7 @@ timezone UTC
 selinux --enforcing
 firewall --enabled --service=mdns,ssh
 network --bootproto=dhcp --device=link --activate --onboot=on
-services --enabled=NetworkManager,sshd,bluetooth,sddm
+services --enabled=NetworkManager,sshd,bluetooth
 
 bootloader --location=mbr --append="rhgb quiet rd.live.image"
 # Live image rootfs sizing for livemedia-creator. This is the SIZE OF THE LIVE
@@ -44,6 +44,13 @@ kernel-modules-extra
 # Required by livemedia-creator to produce a bootable live ISO
 dracut-live
 dracut-config-generic
+# GRUB bootloader bits for the ISO (BIOS El Torito + UEFI) — without grub2-pc
+# the build fails: "cannot open .../i386-pc/moddep.lst".
+grub2-pc
+grub2-pc-modules
+grub2-efi-x64
+grub2-tools
+shim-x64
 
 # Snapshot / rollback stack (btrfs) — lets BookOS Settings snapshot before
 # every release upgrade and roll back from GRUB if something breaks.
@@ -256,6 +263,11 @@ snapper -c root create-config / 2>/dev/null || true
 # Regenerate GRUB so grub-btrfs adds the "BookOS snapshots" submenu.
 grub2-mkconfig -o /boot/grub2/grub.cfg 2>/dev/null || true
 systemctl enable grub-btrfsd 2>/dev/null || true
+
+# Default to the graphical target + SDDM (the `services` line can't enable a
+# display-manager that isn't installed at parse time; do it here instead).
+systemctl set-default graphical.target 2>/dev/null || true
+systemctl enable sddm.service 2>/dev/null || true
 
 # Cleanup
 dnf clean all
