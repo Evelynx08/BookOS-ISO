@@ -11,6 +11,7 @@ BuildArch:      noarch
 # so upgrading 0.5 → 0.6 brings the whole redesign in one dnf transaction.
 Requires:       bookos-branding      = %{version}
 Requires:       bookos-widgets       = %{version}
+Requires:       bookos-icons         = %{version}
 Requires:       bookos-plasma-theme  = %{version}
 Requires:       bookos-look-and-feel = %{version}
 # Full appearance bundle (global theme, icons, cursor, fonts, GTK + /etc/skel
@@ -40,5 +41,5 @@ This RPM contains no files — it only defines Requires.
 # (empty)
 
 %changelog
-* %(date "+%a %b %d %Y") BookOS <packages@bookos.es> - 0.6-1
+* %(LC_ALL=C date "+%a %b %d %Y") BookOS <packages@bookos.es> - 0.6-1
 - 0.6: widgets pinned into the release set (macOS-style cohesive upgrade)

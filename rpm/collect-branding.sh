@@ -106,7 +106,10 @@ else
 fi
 
 # ── Pack ────────────────────────────────────────────────────────────────
-OUT="${HOME}/rpmbuild/SOURCES/bookos-branding-${VERSION}.tar.gz"
+# Resolve the real user's home even under sudo, so the tarball lands where the
+# non-root `rpmbuild` reads from (not /root/rpmbuild/SOURCES).
+USER_HOME="${SUDO_USER:+/home/$SUDO_USER}"
+OUT="${USER_HOME:-$HOME}/rpmbuild/SOURCES/bookos-branding-${VERSION}.tar.gz"
 mkdir -p "$(dirname "$OUT")"
 tar -C "$(dirname "$STAGE")" -czf "$OUT" "bookos-branding-${VERSION}"
 rm -rf "$(dirname "$STAGE")"

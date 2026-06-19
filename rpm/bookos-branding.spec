@@ -120,5 +120,5 @@ fi
 true
 
 %changelog
-* %(date "+%a %b %d %Y") BookOS <packages@bookos.es> - 0.6-1
+* %(LC_ALL=C date "+%a %b %d %Y") BookOS <packages@bookos.es> - 0.6-1
 - 0.6: real Plymouth theme + Anaconda installer branding

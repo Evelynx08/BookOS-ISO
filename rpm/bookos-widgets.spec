@@ -44,5 +44,5 @@ done
 %{_datadir}/plasma/plasmoids/*
 
 %changelog
-* %(date "+%a %b %d %Y") BookOS <packages@bookos.es> - 0.6-1
+* %(LC_ALL=C date "+%a %b %d %Y") BookOS <packages@bookos.es> - 0.6-1
 - Widgets refreshed for BookOS 0.6 (performance, springs, control station polish)
