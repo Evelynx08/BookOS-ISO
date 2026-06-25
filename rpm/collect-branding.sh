@@ -44,6 +44,14 @@ if [ -d "$WP_DIR" ]; then
 else
     warn "no wallpapers dir found"
 fi
+# Extra wallpaper set (the blue/ember/pine/purple dark+light PNGs). Override the
+# location with EXTRA_WALLPAPERS=/path. These get shipped alongside the repo set
+# in /usr/share/backgrounds/bookos/ and are what the default desktop points at.
+EXTRA_WP="${EXTRA_WALLPAPERS:-/home/evelyn/Descargas/Wallpapers}"
+if [ -d "$EXTRA_WP" ] && compgen -G "$EXTRA_WP/*.png" >/dev/null; then
+    cp -f "$EXTRA_WP"/*.png "$STAGE/wallpapers/"
+    say "wallpapers: + $(ls "$EXTRA_WP"/*.png | wc -l) extra PNGs (from $EXTRA_WP)"
+fi
 
 # ── SDDM theme (login screen) ───────────────────────────────────────────
 if [ -d "$ROOT/BookOS-SDDM/theme-sddm/bookos" ]; then

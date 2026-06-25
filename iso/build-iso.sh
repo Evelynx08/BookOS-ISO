@@ -37,6 +37,18 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 RELEASEVER="${RELEASEVER:-44}"
 WORKDIR="${WORKDIR:-/var/tmp/bookos-iso-${CHANNEL}}"
 
+# ── Live-ISO kernel cmdline ────────────────────────────────────────────────
+# Injected into the live boot menu via lmc --extra-boot-args (fills the lorax
+# @EXTRA@ placeholder in BOTH the BIOS and EFI grub.cfg). NO ISO remaster, so
+# the appended GPT/ESP partition stays intact.
+#
+# Default set is taken from a working Intel Core Ultra 200V (Lunar Lake, Arc
+# 130V/140V, xe driver) laptop where the stock live ISO loaded then crashed.
+# ibt=off + intel_pstate=passive are the boot-critical ones; the rest are the
+# laptop's power-tuning params. nohz_full is intentionally dropped (core-count
+# specific). Override with EXTRA_BOOT_ARGS="...".
+EXTRA_BOOT_ARGS="${EXTRA_BOOT_ARGS:-ibt=off intel_pstate=passive nowatchdog nvme_core.default_ps_max_latency_us=5500 pcie_aspm=force pcie_aspm.policy=powersupersave workqueue.power_efficient=1 xe.enable_psr=1}"
+
 # ── Optional app set ──────────────────────────────────────────────────────
 # "all apps" pulls the full BookOS app catalog on top of the core meta set.
 # Override the list with APPS="...". Empty when allapps=N.
@@ -65,7 +77,23 @@ KS_IN="$SCRIPT_DIR/bookos-$CHANNEL.ks"
 [ -f "$KS_IN" ] || { echo "✗ no existe el kickstart: $KS_IN"; exit 1; }
 
 KS_RAW="$WORKDIR/bookos-raw.ks"
-ksflatten -c "$KS_IN" -o "$KS_RAW" 2>/dev/null || cp "$KS_IN" "$KS_RAW"
+# Flatten %include ourselves: ksflatten was dropped from pykickstart in recent
+# Fedora and isn't guaranteed in the build container. Our kickstarts only use a
+# single level of relative `%include foo.ks`, so inline each included file
+# (resolved relative to SCRIPT_DIR). This replaces the unreliable
+# `ksflatten || cp` that silently dropped the base ks (and dracut-live with it).
+awk -v dir="$SCRIPT_DIR" '
+    /^[[:space:]]*%include[[:space:]]+/ {
+        f = $2
+        if (f !~ /^\//) f = dir "/" f
+        while ((getline line < f) > 0) print line
+        close(f)
+        next
+    }
+    { print }
+' "$KS_IN" > "$KS_RAW"
+grep -q '^dracut-live' "$KS_RAW" \
+    || { echo "✗ el kickstart aplanado no contiene dracut-live (include no resuelto). Abortando."; exit 1; }
 
 # Substitute simple vars. __RELEASEVER__/__BASEARCH__ are made literal in the
 # bookos repo URL (anaconda doesn't reliably expand $releasever in a kickstart
@@ -84,6 +112,19 @@ awk -v apps="$OPTIONAL_APPS_KS" '
 ' "$KS_RAW.sub" > "$WORKDIR/bookos-flat.ks"
 rm -f "$KS_RAW" "$KS_RAW.sub"
 
+# ── Optional: LOCAL bookos repo ─────────────────────────────────────────────
+# Test freshly-built RPMs without publishing to bookos.es. Point the build-time
+# `repo --name=bookos` line at a local createrepo_c'd dir:
+#   createrepo_c /path/to/rpms && BOOKOS_LOCAL_REPO=/path/to/rpms bash build-iso.sh …
+# (Only swaps the OS-package repo; bookos-apps/store-files stays remote. The
+#  trailing space in '--name=bookos ' avoids touching '--name=bookos-apps'.)
+if [ -n "${BOOKOS_LOCAL_REPO:-}" ]; then
+    [ -f "$BOOKOS_LOCAL_REPO/repodata/repomd.xml" ] \
+        || { echo "✗ $BOOKOS_LOCAL_REPO no es un repo (falta repodata/). Corre: createrepo_c $BOOKOS_LOCAL_REPO"; exit 1; }
+    echo "[i] Repo bookos LOCAL: file://$BOOKOS_LOCAL_REPO"
+    sed -i -E "s#(repo --name=bookos )--baseurl=[^ ]+#\1--baseurl=file://$BOOKOS_LOCAL_REPO#" "$WORKDIR/bookos-flat.ks"
+fi
+
 # ── Build ──────────────────────────────────────────────────────────────────
 # Slugify the OS name for the filename (spaces → -, lowercase).
 SLUG="$(echo "$OS_NAME" | tr '[:upper:] ' '[:lower:]-' | tr -cd 'a-z0-9.-')"
@@ -96,6 +137,7 @@ echo "  Version   : $VERSION"
 echo "  Fedora    : $RELEASEVER"
 echo "  All apps  : $ALLAPPS  ${OPTIONAL_APPS:+($OPTIONAL_APPS)}"
 echo "  Output    : $OUTDIR/$ISO_NAME"
+echo "  Boot args : $EXTRA_BOOT_ARGS"
 echo "──────────────────────────────────────────────"
 
 livemedia-creator \
@@ -106,42 +148,36 @@ livemedia-creator \
     --iso-name "$ISO_NAME" \
     --resultdir "$WORKDIR/results" \
     --project "$OS_NAME" \
+    --extra-boot-args "$EXTRA_BOOT_ARGS" \
     --releasever "$RELEASEVER" \
     --volid "$(echo "$SLUG" | cut -c1-11)-$VERSION"
 
 mv "$WORKDIR/results/$ISO_NAME" "$OUTDIR/"
 echo "[✓] $OUTDIR/$ISO_NAME"
 
+# ── Checksum ────────────────────────────────────────────────────────────────
+# Publish a SHA256SUMS next to the ISO so users without minisign can still
+# verify the download (sha256sum -c "$ISO_NAME.sha256").
+( cd "$OUTDIR" && sha256sum "$ISO_NAME" > "$ISO_NAME.sha256" )
+echo "[✓] $OUTDIR/$ISO_NAME.sha256"
+
 # ── Fix boot-menu title ("BookOS 44" → "BookOS <version>") ────────────────
 # lorax stamps the GRUB/isolinux menu labels as "<project> <releasever>", so
-# the live boot menu reads "BookOS 44" (the Fedora base). Rewrite those labels
-# to the BookOS version. Needs xorriso to remaster in place; skipped (with a
-# note) if it's missing — purely cosmetic, never fatal.
-if command -v xorriso >/dev/null; then
-    ISO_PATH="$OUTDIR/$ISO_NAME"
-    EXDIR="$WORKDIR/bootcfg"; rm -rf "$EXDIR"; mkdir -p "$EXDIR"
-    # Boot config files that may carry the title (paths vary by Fedora spin).
-    CFGS="/isolinux/isolinux.cfg /EFI/BOOT/grub.cfg /EFI/BOOT/BOOT.conf /boot/grub2/grub.cfg"
-    CHANGED=0
-    for c in $CFGS; do
-        if xorriso -osirrox on -indev "$ISO_PATH" -extract "$c" "$EXDIR/$(basename "$c")" 2>/dev/null; then
-            # Only on menu-title lines (label/menuentry/title), so kernel args
-            # that may contain "$RELEASEVER" are left untouched. Cover the exact
-            # project name and a lowercase slug variant.
-            sed -i -E "/(menu label|menuentry|^\s*title|set default_title|^label )/I {
-                s/$OS_NAME $RELEASEVER/$OS_NAME $VERSION/g
-                s/$SLUG $RELEASEVER/$SLUG $VERSION/Ig
-            }" "$EXDIR/$(basename "$c")"
-            xorriso -boot_image any keep -dev "$ISO_PATH" \
-                -update "$EXDIR/$(basename "$c")" "$c" 2>/dev/null && CHANGED=1
-        fi
-    done
-    [ "$CHANGED" = 1 ] && echo "[✓] Menú GRUB: '$OS_NAME $RELEASEVER' → '$OS_NAME $VERSION'" \
-                       || echo "[i] No se encontró el título en los configs de arranque (sin cambios)."
-else
-    echo "[i] xorriso no instalado: el menú de arranque seguirá diciendo '$OS_NAME $RELEASEVER'."
-    echo "    Para corregirlo: sudo dnf install xorriso  y vuelve a construir."
-fi
+# the live boot menu reads "BookOS 44" (the Fedora base).
+#
+# WARNING: do NOT remaster the finished ISO in place with
+#   xorriso -boot_image any keep -dev ... -update
+# That keeps the El Torito BIOS image but DROPS the appended GPT partition
+# (partition 2 = the EFI System Partition holding images/efiboot.img that
+# lorax appends via xorrisofs -append_partition). The result boots on BIOS
+# but NOT on UEFI ("ISO not UEFI compatible"). efiboot.img lives only inside
+# that appended partition, so once dropped it cannot be recovered.
+#
+# Fix the labels on the extracted tree BEFORE lorax assembles the ISO, or
+# leave the cosmetic "BookOS 44" title. We choose the latter: purely cosmetic,
+# never worth breaking UEFI boot.
+echo "[i] Menú de arranque puede decir '$OS_NAME $RELEASEVER' (cosmético)."
+echo "    No se remasteriza la ISO: hacerlo destruye la partición ESP/UEFI."
 
 # ── Sign (minisign) ──────────────────────────────────────────────────────
 if [ "${SIGN:-1}" != "0" ] && command -v minisign >/dev/null && [ -f /etc/bookos/minisign.key ]; then

@@ -1,5 +1,5 @@
 Name:           bookos-look-and-feel
-Version:        0.6
+Version:        0.6.1
 Release:        1%{?dist}
 Summary:        BookOS default desktop layout (places the BookOS widgets on the panel)
 License:        GPL-3.0

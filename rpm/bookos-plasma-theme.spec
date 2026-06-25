@@ -1,5 +1,5 @@
 Name:           bookos-plasma-theme
-Version:        0.6
+Version:        0.6.1
 Release:        1%{?dist}
 Summary:        BookOS Plasma look — desktop theme, color schemes, Aurorae, Kvantum
 License:        GPL-3.0

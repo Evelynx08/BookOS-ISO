@@ -1,5 +1,5 @@
 Name:           bookos-icons
-Version:        0.6
+Version:        0.6.1
 Release:        1%{?dist}
 Summary:        BookOS icon themes (Dark, Light, Tinted-Dark, Tinted-Light)
 License:        GPL-3.0
@@ -7,6 +7,10 @@ URL:            https://bookos.es/
 BuildArch:      noarch
 # Tarball topdir bookos-icons-%{version}/ holding the BookOS-Icon-Pack-* dirs.
 Source0:        %{name}-%{version}.tar.gz
+# Every BookOS icon theme has `Inherits=Papirus,breeze,hicolor`; without Papirus
+# present, any icon the theme doesn't define falls back to plain breeze
+# (generic terminal/folder icons in Alt+Tab, etc.).
+Requires:       papirus-icon-theme
 
 %description
 The BookOS icon themes. Each pack installs to /usr/share/icons under the name
@@ -43,5 +47,5 @@ for n in BookOS-Dark BookOS-Light BookOS-Tinted-Dark BookOS-Tinted-Light; do
 done
 
 %changelog
-* Thu Jun 19 2026 BookOS <packages@bookos.es> - 0.6-1
+* Fri Jun 19 2026 BookOS <packages@bookos.es> - 0.6-1
 - Initial: BookOS Dark/Light/Tinted icon themes

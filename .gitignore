@@ -1,0 +1,12 @@
+# Build artifacts from build-iso.sh / livemedia-creator / lorax / anaconda.
+# These are written into the repo dir at build time (some as root, mode 600),
+# which is what makes git fail with:
+#   open("anaconda/anaconda.log"): Permission denied
+anaconda/
+iso/anaconda/
+*.log
+
+# Release outputs
+*.iso
+*.iso.sha256
+*.iso.minisig

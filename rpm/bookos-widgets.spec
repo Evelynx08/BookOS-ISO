@@ -1,5 +1,5 @@
 Name:           bookos-widgets
-Version:        0.6
+Version:        0.6.1
 Release:        1%{?dist}
 Summary:        BookOS Plasma widgets (menu, launchpad, control station, battery…)
 License:        GPL-3.0

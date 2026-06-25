@@ -1,5 +1,5 @@
 Name:           bookos-branding
-Version:        0.6
+Version:        0.6.1
 Release:        1%{?dist}
 Summary:        BookOS branding (logos, wallpapers, SDDM/Plymouth themes)
 License:        GPL-3.0
