@@ -1,6 +1,6 @@
 Name:           bookos-branding
 Version:        0.6.1
-Release:        1%{?dist}
+Release:        5%{?dist}
 Summary:        BookOS branding (logos, wallpapers, SDDM/Plymouth themes)
 License:        GPL-3.0
 URL:            https://bookos.es/
@@ -26,10 +26,45 @@ boot splash and OS metadata with BookOS identity.
 install -Dm644 logos/bookos-symbolic.svg       %{buildroot}/usr/share/icons/hicolor/scalable/apps/start-here.svg
 install -Dm644 logos/bookos.svg                %{buildroot}/usr/share/pixmaps/bookos.svg
 install -Dm644 logos/bookos.png                %{buildroot}/usr/share/pixmaps/bookos.png
+# Icono del lanzador "Instalar BookOS" (liveinst)
+if [ -f anaconda/pixmaps/bookos-install.svg ]; then
+    install -Dm644 anaconda/pixmaps/bookos-install.svg %{buildroot}/usr/share/pixmaps/bookos-install.svg
+fi
 
 # Wallpapers
+# Nunito (OFL) — reemplaza SN Pro (restrictiva); alias fontconfig para configs viejas
+if [ -d fonts/nunito ]; then
+    install -dm755 %{buildroot}%{_datadir}/fonts/bookos-nunito
+    install -m644 fonts/nunito/*.ttf %{buildroot}%{_datadir}/fonts/bookos-nunito/
+    install -m644 fonts/nunito/OFL.txt %{buildroot}%{_datadir}/fonts/bookos-nunito/
+    install -Dm644 fonts/60-bookos-snpro-alias.conf         %{buildroot}%{_sysconfdir}/fonts/conf.d/60-bookos-snpro-alias.conf
+fi
+
 install -dm755 %{buildroot}/usr/share/backgrounds/bookos
 cp -r wallpapers/* %{buildroot}/usr/share/backgrounds/bookos/
+
+# Paquetes de wallpaper para el SELECTOR de Plasma (/usr/share/wallpapers).
+# Los archivos sueltos de /usr/share/backgrounds NO salen en el selector —
+# por eso solo se veia el azul. Cada paquete lleva la variante clara como
+# images/ y la oscura como images_dark/ (Plasma 6 cambia solo con el tema).
+for lp in wallpapers/Light/*.png; do
+    name=$(basename "$lp" .png)
+    Name="$(tr '[:lower:]' '[:upper:]' <<< ${name:0:1})${name:1}"
+    pkg=%{buildroot}/usr/share/wallpapers/BookOS-$Name
+    install -Dm644 "$lp" "$pkg/contents/images/2880x1800.png"
+    [ -f "wallpapers/Dark/${name}_dark.png" ] &&         install -Dm644 "wallpapers/Dark/${name}_dark.png" "$pkg/contents/images_dark/2880x1800.png"
+    install -Dm644 "$lp" "$pkg/contents/screenshot.png"
+    cat > "$pkg/metadata.json" <<METAEOF
+{
+    "KPlugin": {
+        "Id": "BookOS-$Name",
+        "Name": "BookOS $Name",
+        "License": "CC-BY-SA-4.0",
+        "Authors": [{ "Name": "BookOS" }]
+    }
+}
+METAEOF
+done
 
 # SDDM theme
 install -dm755 %{buildroot}/usr/share/sddm/themes/bookos
@@ -56,6 +91,14 @@ fi
 if [ -f anaconda/product.d/bookos.conf ]; then
     install -Dm644 anaconda/product.d/bookos.conf \
         %{buildroot}/usr/share/anaconda/product.d/bookos.conf
+    # anaconda F35+ SOLO lee profile.d/ (con [Profile Detection] os_id=bookos);
+    # product.d se mantiene por compatibilidad.
+    install -Dm644 anaconda/product.d/bookos.conf \
+        %{buildroot}/usr/share/anaconda/profile.d/bookos.conf
+    # F44: anaconda SOLO carga perfiles de /etc/anaconda/profile.d (verificado
+    # con pyanaconda real; /usr/share/anaconda/profile.d ni existe).
+    install -Dm644 anaconda/product.d/bookos.conf \
+        %{buildroot}%{_sysconfdir}/anaconda/profile.d/bookos.conf
 fi
 # WebUI stylesheet at the path referenced by bookos.conf's webui_stylesheet key.
 if [ -f anaconda/theme/anaconda-webui-bookos.css ]; then
@@ -74,6 +117,11 @@ if [ -d anaconda/addon/org_bookos_welcome ]; then
 fi
 
 %files
+/etc/anaconda/profile.d/bookos.conf
+/usr/share/pixmaps/bookos-install.svg
+/usr/share/fonts/bookos-nunito/
+%config(noreplace) /etc/fonts/conf.d/60-bookos-snpro-alias.conf
+/usr/share/wallpapers/BookOS-*/
 /usr/share/icons/hicolor/scalable/apps/start-here.svg
 /usr/share/pixmaps/bookos.svg
 /usr/share/pixmaps/bookos.png
@@ -83,6 +131,7 @@ fi
 /usr/share/bookos-settings/lockscreen/
 /usr/share/anaconda/bookos/
 /usr/share/anaconda/product.d/bookos.conf
+/usr/share/anaconda/profile.d/bookos.conf
 %dir /usr/share/anaconda/cockpit/anaconda-webui/preload
 /usr/share/anaconda/cockpit/anaconda-webui/preload/bookos.css
 /usr/share/anaconda/pixmaps/bookos/anaconda-bookos.css
@@ -120,5 +169,11 @@ fi
 true
 
 %changelog
+* Sun Jul 05 2026 BookOS <packages@bookos.es> - 0.6.1-5
+- userChrome.css del instalador: restaura la regla :has() que colapsa TODA la
+  barra de Firefox (antes se veia el chrome completo: VPN, extensiones, tabs)
+* Sun Jul 05 2026 BookOS <packages@bookos.es> - 0.6.1-4
+- Perfil anaconda en /etc/anaconda/profile.d (ruta real en F44) -> btrfs de verdad
+- default_partitioning: free en GiB (60/40 se parseaban como bytes)
 * %(LC_ALL=C date "+%a %b %d %Y") BookOS <packages@bookos.es> - 0.6-1
 - 0.6: real Plymouth theme + Anaconda installer branding

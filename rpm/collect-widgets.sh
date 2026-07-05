@@ -31,6 +31,13 @@ MAP=(
   "com.bookos.win11menu:bookos-win11menu"
   "KdeControlStation:bookos-controlstation"
   "com.mi.widget.bateria:bookos-battery"
+  # Familia control center (ya viven con id corto en ~/.local)
+  "bookos-controlcenter:bookos-controlcenter"
+  "bookos-brightness:bookos-brightness"
+  "bookos-volume:bookos-volume"
+  "bookos-network:bookos-network"
+  "bookos-bluetooth:bookos-bluetooth"
+  "bookos-notifications:bookos-notifications"
 )
 
 set_id() {

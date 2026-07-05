@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=BookOS Shell
+Name[es]=BookOS Shell
+GenericName=Terminal
+Exec=/usr/bin/bookos-open-terminal.sh
+Icon=utilities-terminal
+Terminal=false
+NoDisplay=true
+Categories=System;TerminalEmulator;

@@ -10,7 +10,7 @@ VERSION="${1:-0.6}"
 # Repo root = two levels up from this script (…/BookOS/BookOS-ISO/rpm → …/BookOS)
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 STAGE="$(mktemp -d)/bookos-branding-${VERSION}"
-mkdir -p "$STAGE"/{logos,wallpapers,sddm-theme,plymouth-theme,lockscreen,anaconda}
+mkdir -p "$STAGE"/{logos,wallpapers,sddm-theme,plymouth-theme,lockscreen,anaconda,fonts}
 
 say(){ printf '  %s\n' "$*"; }
 warn(){ printf '  ⚠ %s\n' "$*" >&2; }
@@ -97,6 +97,12 @@ logo.sprite.SetX(Window.GetWidth()/2 - logo.image.GetWidth()/2);
 logo.sprite.SetY(Window.GetHeight()/2 - logo.image.GetHeight()/2);
 EOF
     [ -f "$STAGE/logos/bookos.png" ] && cp "$STAGE/logos/bookos.png" "$STAGE/plymouth-theme/logo.png" || true
+fi
+
+# ── Fuentes (Nunito OFL, sustituye SN Pro) ──────────────────────────────
+if [ -d "$ROOT/BookOS-Fonts" ]; then
+    cp -r "$ROOT/BookOS-Fonts/." "$STAGE/fonts/"
+    say "fonts: Nunito + alias fontconfig SN Pro"
 fi
 
 # ── Anaconda installer branding (pixmaps + WebUI CSS) ───────────────────

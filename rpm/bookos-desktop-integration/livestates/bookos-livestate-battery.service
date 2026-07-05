@@ -1,0 +1,10 @@
+[Unit]
+Description=BookOS Live States - puente UPower (bateria)
+After=graphical-session.target
+
+[Service]
+ExecStart=/usr/lib/bookos/bookos-livestate-battery.py
+Restart=on-failure
+
+[Install]
+WantedBy=graphical-session.target

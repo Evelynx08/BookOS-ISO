@@ -24,11 +24,6 @@ Drag=67
 MoveFactor=6
 Stiffness=5
 
-[NightColor]
-Active=true
-Enabled=false
-NightTemperature=2650
-
 [Plugins]
 blurEnabled=true
 bookos-dock-watcherEnabled=true
@@ -111,3 +106,9 @@ Reference=470
 
 [org.kde.kdecoration2]
 ButtonsOnRight=IAX
+
+[TabBox]
+LayoutName=bookos_switcher
+
+[TabBoxAlternative]
+LayoutName=thumbnail_grid

@@ -1,6 +1,6 @@
 Name:           bookos-desktop-defaults
 Version:        0.6.1
-Release:        1%{?dist}
+Release:        10%{?dist}
 Summary:        BookOS default desktop appearance (global theme, icons, cursor, fonts, GTK + applied config)
 License:        Redistributable, no modification
 URL:            https://bookos.es/
@@ -127,6 +127,25 @@ rm -rf %{buildroot}/usr/share/themes/BookOS-*
 gtk-update-icon-cache -qf /usr/share/icons/hicolor 2>/dev/null || true
 
 %changelog
+* Sun Jul 05 2026 BookOS <packages@bookos.es> - 0.6.1-10
+- Bandeja del sistema retirada del layout (no cargaba en la ISO)
+* Sun Jul 05 2026 BookOS <packages@bookos.es> - 0.6.1-9
+- skel kwinrc sin [NightColor]: la luz nocturna queda en los defaults de Plasma
+* Sat Jul 04 2026 BookOS <packages@bookos.es> - 0.6.1-8
+- Global themes renombrados: BookOS-Dark y BookOS-Light (completos: lockscreen,
+  splash, osd, layout con bandeja); aurorae App-Light y kvantum light incluidos
+* Sat Jul 04 2026 BookOS <packages@bookos.es> - 0.6.1-7
+- Solo BookOS Dark y BookOS Light (Light1 eliminado); esquemas de color completos
+  (Dark/Light x Blue/Green/Orange/Pink/Purple/Red)
+* Sat Jul 04 2026 BookOS <packages@bookos.es> - 0.6.1-6
+- Splash: logo sin estirar (aspect 3:2), variante Light con fondo claro, fuente Nunito
+- Alt+Tab switcher BookOS empaquetado (kwin/tabbox) + TabBox en skel kwinrc
+* Sat Jul 04 2026 BookOS <packages@bookos.es> - 0.6.1-4
+- layout.js: bandeja del sistema (solo Notificaciones, oculta) en los 3 looks,
+  habilita los banners flotantes de notificacion
+* Fri Jul 03 2026 BookOS <packages@bookos.es> - 0.6.1-3
+- Layout recapturado: familia control-center (bluetooth/brightness/network/volume/
+  notifications/controlcenter) en el panel superior; floating por panel (dock si, barra no)
 * %(LC_ALL=C date "+%a %b %d %Y") BookOS <packages@bookos.es> - 0.6.1-1
 - Pull bookos-widgets + bookos-look-and-feel so `dnf upgrade` gives existing
   installs the plasmoids and panel layout.

@@ -32,10 +32,25 @@ for f in "$@"; do
     # Any other applet icon pointing at a dev path → a guaranteed-present icon.
     sed -i -E 's#("icon":[[:space:]]*")/home/[^"]*(")#\1start-here-kde\2#g' "$f"
 
-    # Floating panels (dumpCurrentLayoutJS doesn't emit "floating"). Add it once
-    # per panel, right after the hiding line, unless already present.
+    # Plugin ids: the dev desktop runs the plasmoids under their original long
+    # ids (~/.local), but collect-widgets.sh ships them renamed to short
+    # bookos-* ids. A captured layout must reference the SHIPPED ids or every
+    # BookOS widget shows "package … does not exist" on the ISO.
+    sed -i \
+        -e 's/"com\.bookos\.launchpad"/"bookos-launchpad"/g' \
+        -e 's/"com\.bookos\.menu"/"bookos-menu"/g' \
+        -e 's/"com\.bookos\.bookbar"/"bookos-bookbar"/g' \
+        -e 's/"com\.bookos\.win11menu"/"bookos-win11menu"/g' \
+        -e 's/"com\.mi\.widget\.bateria"/"bookos-battery"/g' \
+        -e 's/"KdeControlStation"/"bookos-controlstation"/g' \
+        "$f"
+
+    # Floating panels (dumpCurrentLayoutJS doesn't emit "floating"). The BookOS
+    # design: bottom dock floats, top bar does not. Key off each panel's
+    # "location" line, unless floating is already present.
     if ! grep -q '"floating"' "$f"; then
-        sed -i -E 's#^([[:space:]]*)("hiding":[[:space:]]*"[^"]*",)#\1\2\n\1"floating": true,#g' "$f"
+        sed -i -E 's#^([[:space:]]*)("location":[[:space:]]*"bottom",)#\1\2\n\1"floating": true,#g' "$f"
+        sed -i -E 's#^([[:space:]]*)("location":[[:space:]]*"top",)#\1\2\n\1"floating": false,#g' "$f"
     fi
 
     echo "  + sanitizado: $f"

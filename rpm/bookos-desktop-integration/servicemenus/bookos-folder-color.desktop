@@ -1,0 +1,53 @@
+[Desktop Entry]
+Type=Service
+MimeType=inode/directory;
+Actions=fcRed;fcOrange;fcYellow;fcGreen;fcBlue;fcViolet;fcPink;fcGrey;fcDefault
+X-KDE-Submenu=Color de carpeta
+X-KDE-Submenu[en]=Folder Color
+X-KDE-Priority=TopLevel
+Icon=folder-blue
+
+[Desktop Action fcRed]
+Name=Rojo
+Icon=folder-red
+Exec=/usr/bin/bookos-folder-color.sh red %F
+
+[Desktop Action fcOrange]
+Name=Naranja
+Icon=folder-orange
+Exec=/usr/bin/bookos-folder-color.sh orange %F
+
+[Desktop Action fcYellow]
+Name=Amarillo
+Icon=folder-yellow
+Exec=/usr/bin/bookos-folder-color.sh yellow %F
+
+[Desktop Action fcGreen]
+Name=Verde
+Icon=folder-green
+Exec=/usr/bin/bookos-folder-color.sh green %F
+
+[Desktop Action fcBlue]
+Name=Azul
+Icon=folder-blue
+Exec=/usr/bin/bookos-folder-color.sh blue %F
+
+[Desktop Action fcViolet]
+Name=Morado
+Icon=folder-violet
+Exec=/usr/bin/bookos-folder-color.sh violet %F
+
+[Desktop Action fcPink]
+Name=Rosa
+Icon=folder-pink
+Exec=/usr/bin/bookos-folder-color.sh pink %F
+
+[Desktop Action fcGrey]
+Name=Gris
+Icon=folder-grey
+Exec=/usr/bin/bookos-folder-color.sh grey %F
+
+[Desktop Action fcDefault]
+Name=Por defecto
+Icon=folder
+Exec=/usr/bin/bookos-folder-color.sh default %F

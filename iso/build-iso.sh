@@ -66,7 +66,7 @@ OPTIONAL_APPS_KS="$(printf '%s\n' $OPTIONAL_APPS)"
 # ── Tooling check ─────────────────────────────────────────────────────────
 command -v livemedia-creator >/dev/null || { echo "✗ falta lorax: sudo dnf install lorax-lmc-novirt"; exit 1; }
 
-mkdir -p "$WORKDIR" "$OUTDIR"
+mkdir -p "$WORKDIR" "$WORKDIR/logs" "$OUTDIR"
 rm -rf "$WORKDIR"/results 2>/dev/null || true
 
 # ── Materialize kickstart ──────────────────────────────────────────────────
@@ -141,6 +141,7 @@ echo "  Boot args : $EXTRA_BOOT_ARGS"
 echo "──────────────────────────────────────────────"
 
 livemedia-creator \
+    --logfile "$WORKDIR/logs/livemedia.log" \
     --make-iso \
     --no-virt \
     --ks "$WORKDIR/bookos-flat.ks" \
@@ -150,7 +151,9 @@ livemedia-creator \
     --project "$OS_NAME" \
     --extra-boot-args "$EXTRA_BOOT_ARGS" \
     --releasever "$RELEASEVER" \
-    --volid "$(echo "$SLUG" | cut -c1-11)-$VERSION"
+    --volid "$(echo "$SLUG" | cut -c1-11)-$VERSION" \
+    --compression zstd \
+    --compress-arg=-Xcompression-level --compress-arg=15
 
 mv "$WORKDIR/results/$ISO_NAME" "$OUTDIR/"
 echo "[✓] $OUTDIR/$ISO_NAME"
@@ -173,11 +176,39 @@ echo "[✓] $OUTDIR/$ISO_NAME.sha256"
 # but NOT on UEFI ("ISO not UEFI compatible"). efiboot.img lives only inside
 # that appended partition, so once dropped it cannot be recovered.
 #
-# Fix the labels on the extracted tree BEFORE lorax assembles the ISO, or
-# leave the cosmetic "BookOS 44" title. We choose the latter: purely cosmetic,
-# never worth breaking UEFI boot.
-echo "[i] Menú de arranque puede decir '$OS_NAME $RELEASEVER' (cosmético)."
-echo "    No se remasteriza la ISO: hacerlo destruye la partición ESP/UEFI."
+# Fix seguro: `-boot_image any replay` (xorriso >= 1.4.4) SÍ reproduce la
+# partición anexada (ESP) y el El Torito al regenerar, así que podemos
+# reescribir las etiquetas del menú sin romper UEFI. Si algo falla, se deja
+# la ISO original intacta (solo es cosmético).
+if command -v xorriso >/dev/null; then
+    TMPB="$(mktemp -d)"
+    for f in EFI/BOOT/grub.cfg boot/grub2/grub.cfg isolinux/isolinux.cfg isolinux/grub.conf; do
+        xorriso -osirrox on -indev "$OUTDIR/$ISO_NAME" -extract "/$f" "$TMPB/$f" >/dev/null 2>&1 || true
+    done
+    if grep -rql "$OS_NAME $RELEASEVER" "$TMPB" 2>/dev/null; then
+        grep -rl "$OS_NAME $RELEASEVER" "$TMPB" | while read -r f; do
+            sed -i "s/$OS_NAME $RELEASEVER/$OS_NAME $VERSION/g" "$f"
+        done
+        MAPS=""
+        for f in EFI/BOOT/grub.cfg boot/grub2/grub.cfg isolinux/isolinux.cfg isolinux/grub.conf; do
+            [ -f "$TMPB/$f" ] && MAPS="$MAPS -map $TMPB/$f /$f"
+        done
+        # shellcheck disable=SC2086
+        if xorriso -indev "$OUTDIR/$ISO_NAME" -outdev "$OUTDIR/$ISO_NAME.retitle" \
+                   -boot_image any replay $MAPS >/dev/null 2>&1; then
+            mv -f "$OUTDIR/$ISO_NAME.retitle" "$OUTDIR/$ISO_NAME"
+            # el .sha256 se generó antes del remaster — regenerarlo
+            ( cd "$OUTDIR" && sha256sum "$ISO_NAME" > "$ISO_NAME.sha256" )
+            echo "[✓] Menú de arranque: '$OS_NAME $RELEASEVER' → '$OS_NAME $VERSION'"
+        else
+            rm -f "$OUTDIR/$ISO_NAME.retitle"
+            echo "[i] Remaster falló — se conserva la ISO original ('$OS_NAME $RELEASEVER', cosmético)."
+        fi
+    fi
+    rm -rf "$TMPB"
+else
+    echo "[i] Sin xorriso: el menú dirá '$OS_NAME $RELEASEVER' (cosmético)."
+fi
 
 # ── Sign (minisign) ──────────────────────────────────────────────────────
 if [ "${SIGN:-1}" != "0" ] && command -v minisign >/dev/null && [ -f /etc/bookos/minisign.key ]; then

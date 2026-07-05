@@ -3,7 +3,7 @@ Autolock=false
 Timeout=5
 
 [Greeter]
-Theme=BookOS Light
+Theme=BookOS-Light
 WallpaperPlugin=org.kde.image
 
 [Greeter][Wallpaper][org.kde.image][General]

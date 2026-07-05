@@ -1,0 +1,4 @@
+# BookOS: libinput-gestures (session daemon) reads the touchpad evdev node
+# directly. Grant the active graphical session's user a read ACL via uaccess
+# (no need to add every user to the `input` group).
+ACTION=="add|change", SUBSYSTEM=="input", KERNEL=="event*", TAG+="uaccess"

@@ -1,6 +1,6 @@
 Name:           bookos-meta
 Version:        0.6.1
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        BookOS umbrella package — pulls the full BookOS stack
 License:        GPL-3.0
 URL:            https://bookos.es/
@@ -18,6 +18,8 @@ Requires:       bookos-look-and-feel = %{version}
 # Full appearance bundle (global theme, icons, cursor, fonts, GTK + /etc/skel
 # applied config) — without this the desktop falls back to plain Breeze.
 Requires:       bookos-desktop-defaults = %{version}
+# Integración de escritorio (ServiceMenus terminal/color + runners KRunner).
+Requires:       bookos-desktop-integration = %{version}
 # (sddm + wallpapers se entregan dentro de bookos-branding)
 
 # ── Apps: con versión propia, solo necesitan un mínimo (no atadas al salto) ──
@@ -44,6 +46,10 @@ This RPM contains no files — it only defines Requires.
 # (empty)
 
 %changelog
+* %(LC_ALL=C date "+%a %b %d %Y") BookOS <packages@bookos.es> - 0.6.1-2
+- Rebuild from current spec: drop bogus bookos-clock>=1.0.0 / bookos-libfprint
+  deps (stale rpm) that made 0.6.1-1 uninstallable and blocked widget upgrades.
+
 * %(LC_ALL=C date "+%a %b %d %Y") BookOS <packages@bookos.es> - 0.6.1-1
 - 0.6.1: corrected panel layout (live capture, no dev paths), widgets reliably
   installed, signed repos (gpgcheck), Spanish installer + assorted fixes.

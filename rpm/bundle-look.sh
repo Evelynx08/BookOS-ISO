@@ -76,7 +76,7 @@ log ""
 
 # ── Grab assets ───────────────────────────────────────────────────────────
 log "[ global theme(s) ]"
-for t in "BookOS Dark" "BookOS Light" "BookOS Light1" "$LNF"; do
+for t in "BookOS-Dark" "BookOS-Light" "$LNF"; do
   d=$(find_dir plasma/look-and-feel "$t") && grab "$d" plasma/look-and-feel
 done
 log "[ plasma desktoptheme ]"; grab "$(find_dir plasma/desktoptheme "$PLASMA")" plasma/desktoptheme
@@ -100,9 +100,18 @@ log ""; log "[ skel config ]"
 for f in kdeglobals plasmarc kwinrc kcminputrc kscreenlockerrc ksplashrc; do
   [ -f "$CFG/$f" ] && cp -a "$CFG/$f" "$OUT/skel/.config/" && log "  + skel/.config/$f"
 done
+# La luz nocturna es preferencia/ubicación del dev, no del producto: no se envía.
+sed -i "/^\[NightColor\]/,/^$/d" "$OUT/skel/.config/kwinrc" 2>/dev/null || true
 for g in gtk-3.0 gtk-4.0 Kvantum; do
   [ -d "$CFG/$g" ] && { mkdir -p "$OUT/skel/.config/$g"; cp -a "$CFG/$g/." "$OUT/skel/.config/$g/"; log "  + skel/.config/$g/"; }
 done
+
+# ── KWin tabbox switchers (Alt+Tab BookOS) ─────────────────────────────────
+if [ -d "$LOC/kwin/tabbox" ]; then
+  mkdir -p "$OUT/share/kwin/tabbox"
+  cp -a "$LOC/kwin/tabbox/." "$OUT/share/kwin/tabbox/"
+  log "[ kwin tabbox ] $(ls "$LOC/kwin/tabbox" | tr '\n' ' ')"
+fi
 
 # ── Panel layout: capture LIVE + sanitize ──────────────────────────────────
 # The on-disk layout.js is stale (Plasma only flushes panels on logout) and full

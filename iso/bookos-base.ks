@@ -1,10 +1,11 @@
 # BookOS — kickstart base (shared by stable/beta/dev)
 # Builds live ISO that includes BookOS branding + bookos-meta + KDE Plasma.
 
-# --addsupport adds extra installed locales so the Anaconda installer language
-# spoke offers them (not just en_US). Spanish here; add more comma-separated.
-lang en_US.UTF-8 --addsupport=es_ES.UTF-8
-keyboard --vckeymap=us --xlayouts='us'
+# Primary locale = Spanish (BookOS target market): the live session AND the
+# Anaconda installer boot in Spanish. --addsupport keeps extra locales
+# installed so the installer language list offers them too.
+lang es_ES.UTF-8 --addsupport=en_US.UTF-8
+keyboard --vckeymap=es --xlayouts='es'
 timezone UTC
 selinux --enforcing
 # SSH is intentionally NOT enabled by default: a consumer laptop OS shouldn't
@@ -92,21 +93,35 @@ syslinux
 snapper
 inotify-tools
 
+# Plymouth: el tema BookOS es ModuleName=script — sin este plugin el splash
+# cae al spinner/texto de Fedora (bug #7).
+plymouth-plugin-script
+
 # BookOS umbrella package (Requires: pulls everything else)
 bookos-meta
-# Listed explicitly (not only via bookos-meta Requires) so a missing/unpublished
-# bookos-widgets aborts the build loudly instead of being silently dropped by
-# --ignoremissing. Ships the plasmoids into the live rootfs (/usr/share/plasma/
-# plasmoids), which install-to-disk then copies to the device.
+# OJO: --ignoremissing aplica a TODO el bloque, así que listar un paquete aquí
+# NO hace que su ausencia aborte la build — se dropea en silencio igual. La
+# verificación real está en el %post --erroronfail del final, que comprueba con
+# rpm -q que los bookos-* críticos entraron. Ships the plasmoids into the live
+# rootfs (/usr/share/plasma/plasmoids), which install-to-disk copies to disk.
 bookos-widgets
 bookos-settings
 bookos-store
 bookos-calc
 bookos-clock
 bookos-notepad
+bookos-new
+bookos-shell
 bookos-branding
 bookos-look-and-feel
 bookos-desktop-defaults
+# Temas e iconos: sin estos la LNF BookOS referencia temas inexistentes y el
+# escritorio cae a Breeze (parte del bug "0.6 sale sin el look BookOS").
+bookos-icons
+bookos-plasma-theme
+bookos-gtk-theme
+# ServiceMenus (terminal / color de carpeta) + runners KRunner (acciones, clima).
+bookos-desktop-integration
 # Optional apps — substituted by build-iso.sh when "all apps" is requested.
 __BOOKOS_OPTIONAL_APPS__
 
@@ -129,6 +144,25 @@ plasma-workspace
 dolphin
 konsole
 firefox
+
+# ── BookOS debloat ──────────────────────────────────────────────────────────
+# Apps/utilidades KDE sustituidas por las de BookOS o innecesarias para el
+# modelo macOS. Solo LEAF packages (apps de hoja, nada de lo que dependa el
+# stack) para no romper la resolución. dolphin/konsole se CONSERVAN (arriba).
+# Ampliar tras validar que la ISO compone bien.
+-plasma-discover              # -> bookos-store
+-plasma-discover-notifier
+-plasma-welcome                # asistente de bienvenida KDE
+-plasma-browser-integration    # integración navegador (bloat)
+-plasma-workspace-wallpapers   # solo wallpapers BookOS en el selector
+# OJO: NO excluir plasma-lookandfeel-fedora / f44-backgrounds-* /
+# desktop-backgrounds-compat: sddm y plasma-workspace los REQUIEREN y dnf
+# aborta toda la instalación (build del 4-jul falló por esto). Sus wallpapers
+# y global themes sobrantes se borran igualmente en el %post de abajo.
+-kinfocenter                   # info del sistema
+-khelpcenter                   # ayuda KDE
+-plasma-firewall               # KCM -> cubierto por bookos-settings
+-plasma-thunderbolt            # KCM -> cubierto por bookos-settings
 
 # SSH server present but NOT auto-started (see `services` line above). Shipping
 # the package means a user can enable remote access with one command, no install
@@ -207,7 +241,13 @@ case "$code" in
 esac
 mkdir -p /var/lib/bookos
 if [ -n "$h" ]; then
-  hostnamectl set-hostname "$h" 2>/dev/null || echo "$h" > /etc/hostname
+  # El unit corre con DefaultDependencies=no, antes de D-Bus → hostnamectl
+  # normalmente falla ahí. El fallback escribe /etc/hostname Y aplica el
+  # hostname al kernel para este boot (si no, el live seguiría como "bookos").
+  hostnamectl set-hostname "$h" 2>/dev/null || {
+    echo "$h" > /etc/hostname
+    hostname "$h" 2>/dev/null || true
+  }
 fi
 touch "$STAMP"
 SH
@@ -327,6 +367,9 @@ fi
 # it survives the liveuser home copy), marked trusted so Plasma runs it.
 for LAUNCH in /usr/share/applications/liveinst.desktop /usr/share/applications/anaconda.desktop; do
     [ -f "$LAUNCH" ] || continue
+    # The stock launcher ships Fedora's icon — rebrand it (system-wide, so the
+    # app menu / launchpad show BookOS too, and the Desktop copy inherits it).
+    sed -i 's|^Icon=.*|Icon=/usr/share/pixmaps/bookos-install.svg|' "$LAUNCH" 2>/dev/null || true
     DESK=/etc/skel/Desktop
     mkdir -p "$DESK"
     cp -f "$LAUNCH" "$DESK/" 2>/dev/null || true
@@ -369,16 +412,49 @@ ACTION=="add|change", SUBSYSTEM=="leds", KERNEL=="*kbd_backlight", \
   RUN+="/bin/chmod g+w /sys/class/leds/%k/brightness"
 EOF
 
-# Bind Fn+F9 to the cycler for new users. Fn+F9 emits KEY_KBDILLUMTOGGLE; if
-# powerdevil already handles it natively this is harmless (duplicate trigger),
-# and it guarantees a working binding when it doesn't.
+# Bind Fn+F9 to the cycler for new users. Fn+F9 emits KEY_KBDILLUMTOGGLE,
+# which reaches Qt as "Keyboard Light On/Off". Two things are needed:
+#  1) unbind powerdevil's own "Toggle Keyboard Backlight" (a plain on/off) —
+#     it claims the key first and kglobalaccel refuses duplicate bindings,
+#     which is why the cycler never fired;
+#  2) register the launcher under [services] (the group kglobalaccel actually
+#     reads for .desktop command shortcuts; _launch there is a single field).
 mkdir -p /etc/skel/.config
 cat >> /etc/skel/.config/kglobalshortcutsrc <<'EOF'
 
-[bookos-kbd-backlight.desktop]
-_k_friendly_name=Keyboard backlight
-_launch=Keyboard Backlight Up,none,/usr/libexec/bookos-kbd-backlight
+[org_kde_powerdevil]
+Toggle Keyboard Backlight=none,Keyboard Light On/Off,Toggle Keyboard Backlight
+
+[services][bookos-kbd-backlight.desktop]
+_launch=Keyboard Light On/Off
+
+[services][bookos-terminal.desktop]
+_launch=Ctrl+Alt+T
+
+[services][org.kde.konsole.desktop]
+_launch=none
+
+[services][bookos-settings.desktop]
+_launch=Meta+I
+
+[services][systemsettings.desktop]
+_launch=none
+
+# Alt+Tab = switcher BookOS (iconos) · Meta+Tab = previsualizaciones
+# (por defecto ambos atajos disparan el mismo "Walk Through Windows")
+[kwin]
+Walk Through Windows=Alt+Tab,Alt+Tab\tMeta+Tab,Recorrer las ventanas
+Walk Through Windows (Reverse)=Alt+Shift+Tab,Alt+Shift+Tab\tMeta+Shift+Tab,Recorrer las ventanas (hacia atrás)
+Walk Through Windows Alternative=Meta+Tab,none,Recorrer las ventanas de modo alternativo
+Walk Through Windows Alternative (Reverse)=Meta+Shift+Tab,none,Recorrer las ventanas de modo alternativo (hacia atrás)
 EOF
+
+# Terminal por defecto (Dolphin "Abrir terminal", kioclient exec…):
+# el wrapper prefiere bookos-shell y cae a konsole si no está.
+mkdir -p /etc/skel/.config
+if ! grep -q "TerminalApplication" /etc/skel/.config/kdeglobals 2>/dev/null; then
+    printf '\n[General]\nTerminalApplication=bookos-open-terminal.sh\nTerminalService=bookos-terminal.desktop\n' >> /etc/skel/.config/kdeglobals
+fi
 mkdir -p /etc/skel/.local/share/applications
 cat > /etc/skel/.local/share/applications/bookos-kbd-backlight.desktop <<'EOF'
 [Desktop Entry]
@@ -391,6 +467,13 @@ EOF
 
 # Plymouth (boot splash) — branding RPM should install /usr/share/plymouth/themes/bookos
 plymouth-set-default-theme bookos -R || true
+
+# GRUB dice "BookOS", no "Fedora", en el menú y los entries generados.
+if [ -f /etc/default/grub ]; then
+    grep -q '^GRUB_DISTRIBUTOR=' /etc/default/grub \
+        && sed -i 's|^GRUB_DISTRIBUTOR=.*|GRUB_DISTRIBUTOR="BookOS"|' /etc/default/grub \
+        || echo 'GRUB_DISTRIBUTOR="BookOS"' >> /etc/default/grub
+fi
 
 # ── Galaxy Book speakers: pre-build the DKMS module into the image ──────────
 # Build against the kernel shipped in the image (not the build host's running
@@ -413,6 +496,42 @@ if [ -n "$WP" ]; then
     [ -f "$f" ] && sed -i -E "s#file://[^,\"]*(fondo\.png|/home/[^,\"]*\.(png|jpg|jpeg))#file://$WP#g" "$f" 2>/dev/null || true
 fi
 
+# ── Idioma: forzar español de forma explícita ───────────────────────────────
+# La directiva `lang` de kickstart no siempre llega a la sesión live (livesys
+# puede pisar locale.conf) — se vio la ISO del 4-jul en inglés pese a lang es_ES.
+echo 'LANG=es_ES.UTF-8' > /etc/locale.conf
+mkdir -p /etc/skel/.config
+cat > /etc/skel/.config/plasma-localerc <<'EOF2'
+[Formats]
+LANG=es_ES.UTF-8
+
+[Translations]
+LANGUAGE=es:en_US
+EOF2
+
+# ── Arranque más rápido ─────────────────────────────────────────────────────
+# NetworkManager-wait-online bloquea network-online.target hasta tener red
+# (~5-30s en portátil sin cable). Nada del escritorio lo necesita.
+systemctl disable NetworkManager-wait-online.service 2>/dev/null || true
+# El journal en disco crece sin límite razonable en un portátil.
+mkdir -p /etc/systemd/journald.conf.d
+printf '[Journal]\nSystemMaxUse=200M\n' > /etc/systemd/journald.conf.d/bookos.conf
+
+# Solo wallpapers BookOS en el selector: borra los stock que queden (Next de
+# plasma-workspace, restos de Fedora). El default BookOS se aplica en first-login.
+for w in /usr/share/wallpapers/*; do
+    case "$(basename "$w")" in BookOS-*) ;; *) rm -rf "$w";; esac
+done
+
+# Global themes: solo BookOS-Dark/BookOS-Light + los Breeze esenciales
+# (org.kde.breeze.desktop es el fallback de Plasma — NO quitarlo).
+for t in /usr/share/plasma/look-and-feel/*; do
+    case "$(basename "$t")" in
+        BookOS-*|org.kde.breeze.desktop|org.kde.breezedark.desktop) ;;
+        *) rm -rf "$t";;
+    esac
+done
+
 # Update icon cache after BookOS icons installed
 gtk-update-icon-cache -f /usr/share/icons/hicolor 2>/dev/null || true
 kbuildsycoca6 --noincremental 2>/dev/null || true
@@ -426,8 +545,8 @@ kbuildsycoca6 --noincremental 2>/dev/null || true
 # per-user cache on first login and restart plasmashell once, then self-delete.
 mkdir -p /etc/skel/.config/autostart /usr/libexec /etc/bookos
 # #6: default global look is a single editable file, NOT hardcoded in the script.
-# Branding/look packages (or an admin) can change it to "BookOS Dark", etc.
-echo "BookOS Light" > /etc/bookos/default-look
+# Branding/look packages (or an admin) can change it to "BookOS-Dark", etc.
+echo "BookOS-Light" > /etc/bookos/default-look
 cat > /usr/libexec/bookos-first-login-refresh <<'SH'
 #!/bin/sh
 STAMP="$HOME/.config/.bookos-applet-refresh-done"
@@ -436,7 +555,7 @@ kbuildsycoca6 --noincremental 2>/dev/null || true
 # Apply the BookOS global look-and-feel so Plasma cascades its colors/icons/
 # style/decoration (otherwise it falls back to Breeze). Theme name read from
 # /etc/bookos/default-look — no hardcoded name here.
-LOOK="$(cat /etc/bookos/default-look 2>/dev/null)"; [ -n "$LOOK" ] || LOOK="BookOS Light"
+LOOK="$(cat /etc/bookos/default-look 2>/dev/null)"; [ -n "$LOOK" ] || LOOK="BookOS-Light"
 plasma-apply-lookandfeel -a "$LOOK" 2>/dev/null || true
 # Wallpaper isn't part of the LnF cascade; set it explicitly, Light/Dark aware.
 case "$LOOK" in *Dark*) WPDIR=Dark;; *) WPDIR=Light;; esac
@@ -521,4 +640,16 @@ passwd -d liveuser 2>/dev/null || true
 
 # Cleanup
 dnf clean all
+%end
+
+# ── Verificación: los bookos-* críticos DE VERDAD entraron ──────────────────
+# %packages lleva --ignoremissing (red de seguridad para paquetes opcionales),
+# lo que también dropea en silencio un bookos-* sin publicar. Este bloque
+# convierte esa ausencia en error de build ruidoso (--erroronfail aborta lorax).
+%post --erroronfail
+for p in bookos-meta bookos-branding bookos-widgets bookos-look-and-feel bookos-new bookos-shell \
+         bookos-desktop-defaults bookos-desktop-integration bookos-settings \
+         bookos-store; do
+    rpm -q "$p" >/dev/null 2>&1 || { echo "✗ paquete BookOS crítico ausente: $p (¿sin publicar en el repo?)"; exit 1; }
+done
 %end

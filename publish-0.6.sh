@@ -8,7 +8,9 @@
 set -euo pipefail
 
 CHANNEL="${1:-dev}"
-VERSION="${2:-0.6}"
+# Versión por defecto = la del spec de bookos-meta (fuente de verdad del
+# release), así el default no se desincroniza cuando suben los specs.
+VERSION="${2:-$(awk '/^Version:/{print $2; exit}' "$(dirname "$0")/rpm/bookos-meta.spec")}"
 NAS="${NAS:-evelynx08@A5-NAS}"
 REPO="/var/www/html/public/repo/fedora/44/x86_64/${CHANNEL}"
 # Resolver el home real aunque se ejecute con sudo (evita /root/rpmbuild vacío)
@@ -21,11 +23,16 @@ echo "→ Canal: $CHANNEL · Versión: $VERSION · Destino: $NAS:$REPO"
 
 # RPMs a subir (los que existan para esta versión)
 shopt -s nullglob
-# noarch: temas/widgets/apps + el módulo de audio DKMS (es noarch).
-files=("$RPMS"/bookos-{branding,widgets,icons,plasma-theme,gtk-theme,look-and-feel,desktop-defaults,meta,settings,viewer,player,galaxybook-audio}-"$VERSION"-*.rpm)
-# arch-specific: libfprint-bookos (compilado). Versiona aparte (1.94.9), así que
-# se recoge por nombre, no por $VERSION.
+# noarch: temas/widgets/apps, atados a la versión del release.
+files=("$RPMS"/bookos-{branding,widgets,icons,plasma-theme,gtk-theme,look-and-feel,desktop-defaults,meta,settings,viewer,player,desktop-integration}-"$VERSION"-*.rpm)
+# bookos-new es x86_64 (binario Tauri): sale de ARCH_RPMS, no de noarch
+files+=("$ARCH_RPMS"/bookos-new-"$VERSION"-*.rpm)
+files+=("$ARCH_RPMS"/bookos-shell-"$VERSION"-*.rpm)
+# Versionados aparte del release — se recogen por nombre, no por $VERSION:
+# libfprint-bookos (1.94.9, compilado) y bookos-galaxybook-audio (1.0, DKMS
+# noarch; con el glob versionado nunca matcheaba y se quedaba sin publicar).
 files+=("$ARCH_RPMS"/libfprint-bookos-*.rpm)
+files+=("$RPMS"/bookos-galaxybook-audio-*.rpm)
 [ ${#files[@]} -gt 0 ] || { echo "✗ no hay RPMs $VERSION en $RPMS"; echo "  (si están en otra ruta: RPMS=/ruta ./publish-0.6.sh $CHANNEL $VERSION)"; exit 1; }
 
 # ── Firmar los RPMs ────────────────────────────────────────────────────────
