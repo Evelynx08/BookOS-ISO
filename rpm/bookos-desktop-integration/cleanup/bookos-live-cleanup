@@ -1,0 +1,22 @@
+#!/bin/sh
+# BookOS: retirar restos de la sesión live que una instalación copió al disco
+# (autologin de SDDM a liveuser, la cuenta liveuser sin contraseña y el icono
+# del instalador). Idempotente; marca /var/lib/bookos-live-cleanup.done.
+# Misma lógica que el post-script de Anaconda del kickstart de la ISO — esta
+# copia viaja en el RPM para que las instalaciones ANTIGUAS se curen vía update.
+rm -f /etc/sddm.conf.d/zz-live-autologin.conf
+rm -f /etc/skel/Desktop/liveinst.desktop /etc/skel/Desktop/anaconda.desktop
+rmdir /etc/skel/Desktop 2>/dev/null || true
+for d in /home/*/Desktop; do
+    rm -f "$d/liveinst.desktop" "$d/anaconda.desktop" 2>/dev/null || true
+done
+if id liveuser >/dev/null 2>&1; then
+    OTHER=$(awk -F: '$3>=1000 && $3<65534 && $1!="liveuser"{print $1; exit}' /etc/passwd)
+    if [ -n "$OTHER" ]; then
+        userdel -r liveuser 2>/dev/null || userdel liveuser 2>/dev/null || true
+        rm -rf /home/liveuser
+    else
+        passwd -l liveuser 2>/dev/null || true
+    fi
+fi
+touch /var/lib/bookos-live-cleanup.done

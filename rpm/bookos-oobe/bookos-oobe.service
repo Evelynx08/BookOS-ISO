@@ -1,0 +1,16 @@
+[Unit]
+Description=BookOS: asistente de primer arranque (crear usuario)
+ConditionKernelCommandLine=!rd.live.image
+ConditionPathExists=!/var/lib/bookos-oobe.done
+After=systemd-user-sessions.service bookos-live-cleanup.service
+Before=display-manager.service
+
+[Service]
+Type=oneshot
+# Plymouth suelta el DRM antes de que cage lo tome.
+ExecStartPre=-/usr/bin/plymouth quit
+ExecStart=/usr/libexec/bookos-oobe-session
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

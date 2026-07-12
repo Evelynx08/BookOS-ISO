@@ -1,6 +1,6 @@
 Name:           bookos-branding
 Version:        0.6.1
-Release:        5%{?dist}
+Release:        6%{?dist}
 Summary:        BookOS branding (logos, wallpapers, SDDM/Plymouth themes)
 License:        GPL-3.0
 URL:            https://bookos.es/
@@ -99,6 +99,33 @@ if [ -f anaconda/product.d/bookos.conf ]; then
     # con pyanaconda real; /usr/share/anaconda/profile.d ni existe).
     install -Dm644 anaconda/product.d/bookos.conf \
         %{buildroot}%{_sysconfdir}/anaconda/profile.d/bookos.conf
+
+    # BUG /var: el perfil trae `must_not_be_on_root = /var` (heredado de un
+    # perfil tipo atomic/ostree) A LA VEZ que `default_scheme = BTRFS`, que solo
+    # crea subvolúmenes para / y /home — NUNCA para /var. El particionado
+    # automático no puede cumplir su propia regla, así que el comprobador de
+    # almacenamiento de Anaconda aborta siempre con "Su /var debe estar en una
+    # partición separada o un LV". BookOS hace los snapshots con snapper sobre el
+    # subvolumen raíz, no necesita /var aparte, así que vaciamos la restricción
+    # en las TRES copias instaladas. El segundo sed borra posibles líneas de
+    # continuación indentadas (formato INI multilínea) para no dejar valor
+    # colgando; el rango se cierra en la primera línea no indentada.
+    for _p in %{buildroot}/usr/share/anaconda/product.d/bookos.conf \
+              %{buildroot}/usr/share/anaconda/profile.d/bookos.conf \
+              %{buildroot}%{_sysconfdir}/anaconda/profile.d/bookos.conf; do
+        [ -f "$_p" ] || continue
+        sed -i -e 's/^\([[:space:]]*must_not_be_on_root[[:space:]]*=\).*/\1/' \
+               -e '/^[[:space:]]*must_not_be_on_root[[:space:]]*=$/,/^[^[:space:]]/{/^[[:space:]]\+[^[:space:]]/d}' \
+               "$_p"
+        # Arranque del sistema INSTALADO: sin menu_auto_hide (menú GRUB visible;
+        # heredarlo de fedora-workstation deja grubenv con menu_auto_hide=1 y el
+        # menú no sale nunca) y entrada EFI en EFI/fedora, donde shim-x64 y
+        # grub2-efi-x64 instalan los binarios de verdad. Solo se añade si el
+        # perfil no define ya [Bootloader]; si lo define, lo corrige el %post
+        # del kickstart de la ISO (reescribe el perfil con configparser).
+        grep -q '^\[Bootloader\]' "$_p" || \
+            printf '\n[Bootloader]\nmenu_auto_hide = False\nefi_dir = fedora\n' >> "$_p"
+    done
 fi
 # WebUI stylesheet at the path referenced by bookos.conf's webui_stylesheet key.
 if [ -f anaconda/theme/anaconda-webui-bookos.css ]; then
@@ -169,6 +196,13 @@ fi
 true
 
 %changelog
+* Mon Jul 06 2026 BookOS <packages@bookos.es> - 0.6.1-6
+- FIX /var: se vacía `must_not_be_on_root` en el perfil de Anaconda. Chocaba con
+  default_scheme=BTRFS (que nunca crea /var aparte) y el instalador abortaba
+  siempre pidiendo "/var en partición separada". Snapper no necesita /var aparte.
+- FIX arranque instalado: perfil con menu_auto_hide=False (el heredado True
+  dejaba grubenv con menu_auto_hide=1 → GRUB jamás mostraba menú) y
+  efi_dir=fedora (entrada NVRAM apuntando donde shim/grub existen de verdad).
 * Sun Jul 05 2026 BookOS <packages@bookos.es> - 0.6.1-5
 - userChrome.css del instalador: restaura la regla :has() que colapsa TODA la
   barra de Firefox (antes se veia el chrome completo: VPN, extensiones, tabs)

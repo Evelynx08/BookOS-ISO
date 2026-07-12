@@ -66,7 +66,7 @@ OPTIONAL_APPS_KS="$(printf '%s\n' $OPTIONAL_APPS)"
 # ── Tooling check ─────────────────────────────────────────────────────────
 command -v livemedia-creator >/dev/null || { echo "✗ falta lorax: sudo dnf install lorax-lmc-novirt"; exit 1; }
 
-mkdir -p "$WORKDIR" "$WORKDIR/logs" "$OUTDIR"
+mkdir -p "$WORKDIR" "$WORKDIR/logs" "$WORKDIR/tmp" "$OUTDIR"
 rm -rf "$WORKDIR"/results 2>/dev/null || true
 
 # ── Materialize kickstart ──────────────────────────────────────────────────
@@ -140,8 +140,13 @@ echo "  Output    : $OUTDIR/$ISO_NAME"
 echo "  Boot args : $EXTRA_BOOT_ARGS"
 echo "──────────────────────────────────────────────"
 
+# --tmp: sin él, lmc usa /var/tmp para la imagen de disco (~20 GB) y el árbol
+# del squashfs. En el contenedor podman eso caía en disco del host, pero en una
+# sesión LIVE /var/tmp es el overlay en RAM → el build muere por espacio.
+# Anclarlo bajo WORKDIR cumple la promesa de "WORKDIR = todo el scratch".
 livemedia-creator \
     --logfile "$WORKDIR/logs/livemedia.log" \
+    --tmp "$WORKDIR/tmp" \
     --make-iso \
     --no-virt \
     --ks "$WORKDIR/bookos-flat.ks" \

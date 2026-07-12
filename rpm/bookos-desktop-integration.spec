@@ -1,7 +1,7 @@
 Name:           bookos-desktop-integration
 Version:        0.6.1
 # Release (no Version) sube con los añadidos: bookos-meta pinea `= %%{version}`.
-Release:        6%{?dist}
+Release:        7%{?dist}
 Summary:        BookOS desktop integration — ServiceMenus (terminal, folder colors), KRunner plugins (system actions, weather), Live States
 License:        GPL-3.0
 URL:            https://bookos.es/
@@ -18,7 +18,7 @@ Requires:       konsole
 # Folder colors reuse Papirus folder-<color> icons (already pulled by bookos-icons).
 Requires:       papirus-icon-theme
 # Touchpad gestures daemon (bundled upstream script) reads events via
-# `libinput debug-events` and fires KWin shortcuts through qdbus6.
+# `libinput debug-events` and fires KWin shortcuts through gdbus (glib2).
 Requires:       libinput-utils
 # Soft deps used by the system-actions runner at runtime.
 Recommends:     NetworkManager
@@ -99,12 +99,44 @@ install -Dm755 gestures/libinput-gestures %{buildroot}%{_bindir}/libinput-gestur
 install -Dm644 gestures/libinput-gestures.conf %{buildroot}/etc/skel/.config/libinput-gestures.conf
 install -Dm644 gestures/libinput-gestures.desktop %{buildroot}/etc/skel/.config/autostart/libinput-gestures.desktop
 install -Dm644 gestures/70-bookos-input-uaccess.rules %{buildroot}%{_prefix}/lib/udev/rules.d/70-bookos-input-uaccess.rules
+# Fallback de sistema: libinput-gestures lee ~/.config y si no, /etc.
+install -Dm644 gestures/libinput-gestures.conf %{buildroot}/etc/libinput-gestures.conf
+
+# Limpieza de restos live (liveuser/autologin) en instalaciones EXISTENTES:
+# unidad firstboot que llega vía dnf update; no corre en la sesión live
+# (ConditionKernelCommandLine=!rd.live.image) y se marca hecha en /var/lib.
+install -Dm755 cleanup/bookos-live-cleanup %{buildroot}%{_libexecdir}/bookos-live-cleanup
+install -Dm644 cleanup/bookos-live-cleanup.service %{buildroot}%{_prefix}/lib/systemd/system/bookos-live-cleanup.service
 
 %post
 # Aplica ya la regla del serial (en el arranque la aplica systemd-tmpfiles-setup).
 systemd-tmpfiles --create bookos-serial.conf >/dev/null 2>&1 || :
 # Habilita los puentes para todas las sesiones gráficas (equivale a un preset).
 systemctl --global enable bookos-livestate-media.service bookos-livestate-battery.service >/dev/null 2>&1 || :
+
+# ── Reparación de instalaciones EXISTENTES (llega vía dnf update) ────────────
+# 1) Gestos: /etc/skel solo aplica a usuarios NUEVOS. Usuarios ya creados
+#    tienen el conf roto con qdbus6 (no existe en Fedora) o ni siquiera tienen
+#    conf/autostart (instalados antes de 0.6.1-4). Se repara cada home; solo se
+#    sobreescribe un conf si contiene qdbus6 (respeta personalizaciones).
+for h in /home/*; do
+    [ -d "$h/.config" ] || continue
+    conf="$h/.config/libinput-gestures.conf"
+    if [ ! -f "$conf" ] || grep -q qdbus6 "$conf" 2>/dev/null; then
+        install -m644 /etc/libinput-gestures.conf "$conf" 2>/dev/null || :
+        chown --reference="$h/.config" "$conf" 2>/dev/null || :
+    fi
+    auto="$h/.config/autostart/libinput-gestures.desktop"
+    if [ ! -f "$auto" ]; then
+        install -Dm644 /etc/skel/.config/autostart/libinput-gestures.desktop "$auto" 2>/dev/null || :
+        chown --reference="$h/.config" "$h/.config/autostart" "$auto" 2>/dev/null || :
+    fi
+done
+# 2) Limpieza live firstboot: enable manual (los presets la dejarían apagada).
+#    En el compose de la ISO es no-op hasta el siguiente arranque instalado.
+mkdir -p /etc/systemd/system/multi-user.target.wants
+ln -sf %{_prefix}/lib/systemd/system/bookos-live-cleanup.service \
+    /etc/systemd/system/multi-user.target.wants/bookos-live-cleanup.service 2>/dev/null || :
 
 %postun
 if [ $1 -eq 0 ]; then
@@ -138,9 +170,16 @@ fi
 /etc/skel/.config/libinput-gestures.conf
 /etc/skel/.config/autostart/libinput-gestures.desktop
 %{_prefix}/lib/udev/rules.d/70-bookos-input-uaccess.rules
+/etc/libinput-gestures.conf
+%{_libexecdir}/bookos-live-cleanup
+%{_prefix}/lib/systemd/system/bookos-live-cleanup.service
 %{_datadir}/applications/bookos-terminal.desktop
 %config(noreplace) /etc/xdg/mimeapps.list
 %changelog
+* Tue Jul 07 2026 BookOS <packages@bookos.es> - 0.6.1-7
+- Gestos touchpad: qdbus6 (binario Arch, inexistente en Fedora) → gdbus call
+- %%post repara homes existentes (conf qdbus6 o ausente) + conf fallback en /etc
+- Limpieza liveuser/autologin post-instalación como unidad firstboot (viaja vía update)
 * Sun Jul 05 2026 BookOS <packages@bookos.es> - 0.6.1-6
 - WEBKIT_DISABLE_DMABUF_RENDERER=1 global: las apps Tauri crasheaban en Wayland (Error 71)
 * Sat Jul 04 2026 BookOS <packages@bookos.es> - 0.6.1-5

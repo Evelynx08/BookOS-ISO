@@ -7,7 +7,9 @@
 # installed so the installer language list offers them too.
 lang es_ES.UTF-8 --addsupport=en_US.UTF-8
 keyboard --vckeymap=es --xlayouts='es'
-timezone UTC
+# Default sensato para es_ES; la página de fecha/hora del WebUI queda VISIBLE
+# (es la única que BookOS Welcome no cubre) por si el usuario está en otra zona.
+timezone Europe/Madrid
 selinux --enforcing
 # SSH is intentionally NOT enabled by default: a consumer laptop OS shouldn't
 # ship a listening sshd / open firewall port on every install. Users who want
@@ -86,6 +88,11 @@ grub2-efi-x64
 grub2-efi-x64-cdboot
 shim-x64
 syslinux
+# Anaconda ejecuta efibootmgr chrooteado en el destino al instalar el gestor
+# de arranque; anaconda-install-env-deps 44.30 (F44) ya NO lo arrastra como
+# dependencia dura → sin esto la instalación muere con
+# "[Errno 2] No existe el fichero o el directorio: 'efibootmgr'".
+efibootmgr
 
 # Snapshot / rollback stack (btrfs) — lets BookOS Settings snapshot before
 # every release upgrade and roll back from GRUB if something breaks.
@@ -100,6 +107,11 @@ plymouth-plugin-script
 
 # BookOS umbrella package (Requires: pulls everything else)
 bookos-meta
+# Asistente de primer arranque (BookOS Welcome, C++/Qt6, estilo macOS Setup):
+# idioma, teclado, Wi-Fi, cuenta (wheel), huella y tema. La página de cuentas
+# del WebUI va oculta vía perfil. Verificado en el %post --erroronfail final.
+# Sustituye al esqueleto bookos-oobe (rpm/bookos-oobe, ya no se incluye).
+bookos-welcome
 # OJO: --ignoremissing aplica a TODO el bloque, así que listar un paquete aquí
 # NO hace que su ausencia aborte la build — se dropea en silencio igual. La
 # verificación real está en el %post --erroronfail del final, que comprueba con
@@ -475,6 +487,209 @@ if [ -f /etc/default/grub ]; then
         || echo 'GRUB_DISTRIBUTOR="BookOS"' >> /etc/default/grub
 fi
 
+# ── FIX instalador: /var + arranque del sistema instalado ───────────────────
+# Dos bugs de instalación, corregidos con la mecánica REAL de Anaconda
+# (verificada contra pyanaconda: grub2.py::write_defaults abre /etc/default/grub
+# del destino con "w+" — lo REESCRIBE —, y anaconda.py::appendPostScripts corre
+# incondicionalmente los fragmentos de /usr/share/anaconda/post-scripts/*ks):
+#
+# 1) /var: el perfil bookos.conf trae `must_not_be_on_root = /var` junto a
+#    default_scheme=BTRFS (que jamás crea /var aparte) → el comprobador de
+#    almacenamiento aborta SIEMPRE ("Su /var debe estar en una partición
+#    separada"). Anaconda lee el perfil DEL ENTORNO LIVE al arrancar liveinst,
+#    así que parchearlo aquí arregla la instalación aunque el RPM
+#    bookos-branding venga sin corregir.
+# 2) "No aparece GRUB / no sale BookOS": editar /etc/default/grub del live NO
+#    sirve (Anaconda lo reescribe de cero en el destino). Lo que sí gobierna el
+#    destino es (a) el perfil: menu_auto_hide=True hace que Anaconda marque
+#    grubenv con menu_auto_hide=1 boot_success=1 → menú oculto para siempre; y
+#    (b) la entrada NVRAM UEFI, que el firmware Samsung a veces ignora o pierde
+#    → el portátil ni lista BookOS. Se corrige vía perfil + post-script.
+python3 - <<'PYEOF'
+import configparser, os
+for p in ("/etc/anaconda/profile.d/bookos.conf",
+          "/usr/share/anaconda/profile.d/bookos.conf",
+          "/usr/share/anaconda/product.d/bookos.conf"):
+    if not os.path.isfile(p):
+        continue
+    c = configparser.RawConfigParser(strict=False)
+    c.optionxform = str
+    c.read(p, encoding="utf-8")
+    if c.has_section("Storage Constraints"):
+        c.set("Storage Constraints", "must_not_be_on_root", "")  # (1) /var libre
+    if not c.has_section("Bootloader"):
+        c.add_section("Bootloader")
+    c.set("Bootloader", "menu_auto_hide", "False")   # (2a) menú GRUB visible
+    c.set("Bootloader", "efi_dir", "fedora")         # (2b) shim/grub reales viven en EFI/fedora
+    # (3) Ocultas TODAS las páginas que BookOS Welcome ya pregunta en el primer
+    # arranque: idioma (ese screen incluye el teclado), cuentas y red (Wi-Fi).
+    # Queda visible solo fecha/hora (Welcome no tiene página de zona horaria).
+    # Mismo mecanismo y misma lista (menos date-time) que Fedora Workstation.
+    if not c.has_section("User Interface"):
+        c.add_section("User Interface")
+    c.set("User Interface", "hidden_webui_pages",
+          "anaconda-screen-language anaconda-screen-accounts anaconda-screen-network")
+    with open(p, "w", encoding="utf-8") as f:
+        c.write(f)
+    print("perfil anaconda parcheado: " + p)
+PYEOF
+# Cinturón extra por si python fallara (cubre el caso una-línea del perfil):
+for _p in /etc/anaconda/profile.d/bookos.conf \
+          /usr/share/anaconda/profile.d/bookos.conf \
+          /usr/share/anaconda/product.d/bookos.conf; do
+    [ -f "$_p" ] && sed -i 's/^\([[:space:]]*must_not_be_on_root[[:space:]]*=\).*/\1/' "$_p" || true
+done
+grep -rn "must_not_be_on_root\|menu_auto_hide\|efi_dir" /etc/anaconda /usr/share/anaconda/profile.d /usr/share/anaconda/product.d 2>/dev/null || true
+
+# Fragmento post-install que Anaconda ejecuta chrooteado EN EL SISTEMA
+# INSTALADO al final de cada instalación (también las live). Aquí sí persisten
+# los cambios: corre DESPUÉS de que Anaconda escriba /etc/default/grub, el
+# grub.cfg y la entrada NVRAM. Se genera con printf porque una línea que
+# empiece por %post/%end dentro de ESTE %post rompería el parseo de
+# pykickstart del kickstart de la ISO.
+mkdir -p /usr/share/anaconda/post-scripts
+{
+    printf '%s\n' '%post'
+    cat <<'FRAGEOF'
+# BookOS: garantizar que el sistema instalado arranca y muestra GRUB.
+set_kv() {
+    if grep -q "^$1=" /etc/default/grub 2>/dev/null; then
+        sed -i "s|^$1=.*|$1=$2|" /etc/default/grub
+    else
+        echo "$1=$2" >> /etc/default/grub
+    fi
+}
+if [ -f /etc/default/grub ]; then
+    set_kv GRUB_TIMEOUT 5
+    set_kv GRUB_TIMEOUT_STYLE menu
+    set_kv GRUB_DISTRIBUTOR '"BookOS"'
+fi
+# Sin auto-ocultado del menú (si el perfil o un resto previo lo marcó, fuera).
+grub2-editenv - unset menu_auto_hide 2>/dev/null || true
+
+# UEFI: ruta de arranque de RESPALDO \EFI\BOOT\BOOTX64.EFI en la ESP. Algunos
+# firmware (Samsung incluido) ignoran o pierden la entrada NVRAM tras updates
+# de Windows o reset de BIOS y el equipo "se queda sin GRUB". Con la ruta de
+# respaldo el firmware siempre encuentra algo arrancable en el disco.
+if [ -d /sys/firmware/efi ] && [ -d /boot/efi/EFI ]; then
+    if [ -f /boot/efi/EFI/fedora/shimx64.efi ] && [ ! -f /boot/efi/EFI/BOOT/BOOTX64.EFI ]; then
+        mkdir -p /boot/efi/EFI/BOOT
+        cp /boot/efi/EFI/fedora/shimx64.efi /boot/efi/EFI/BOOT/BOOTX64.EFI 2>/dev/null || true
+        cp /boot/efi/EFI/fedora/grubx64.efi /boot/efi/EFI/BOOT/grubx64.efi  2>/dev/null || true
+        cp /boot/efi/EFI/fedora/mmx64.efi   /boot/efi/EFI/BOOT/mmx64.efi    2>/dev/null || true
+    fi
+    # Y si no quedó NINGUNA entrada NVRAM nuestra, créala apuntando al shim.
+    if command -v efibootmgr >/dev/null 2>&1 && ! efibootmgr 2>/dev/null | grep -qiE 'BookOS|Fedora'; then
+        ESP="$(findmnt -no SOURCE /boot/efi 2>/dev/null)"
+        if [ -n "$ESP" ]; then
+            PARTNUM="$(cat /sys/class/block/$(basename "$ESP")/partition 2>/dev/null)"
+            PARENT="/dev/$(lsblk -no PKNAME "$ESP" 2>/dev/null | head -n1)"
+            [ -n "$PARTNUM" ] && [ -b "$PARENT" ] && \
+                efibootmgr -c -d "$PARENT" -p "$PARTNUM" -L "BookOS" \
+                    -l '\EFI\fedora\shimx64.efi' 2>/dev/null || true
+        fi
+    fi
+fi
+# Regenera la config para aplicar timeout/estilo (grub-btrfs/BLS incluidos).
+grub2-mkconfig -o /boot/grub2/grub.cfg 2>/dev/null || true
+FRAGEOF
+    printf '%s\n' '%end'
+} > /usr/share/anaconda/post-scripts/zz-bookos-boot.ks
+
+# Cinturón FINAL (verificado 2026-07-06 contra una instalación real rota): si
+# el post-script de arriba no llegara a ejecutarse, Anaconda deja grubenv con
+# menu_auto_hide=1 → el GRUB instalado salta el menú para siempre. Como una
+# instalación live copia este rootfs tal cual al disco, esta unidad viaja al
+# sistema instalado y lo corrige en su primer arranque. No corre en la sesión
+# live (rd.live.image) y se desactiva sola tras aplicarse.
+cat > /usr/local/sbin/bookos-grub-firstboot <<'EOF'
+#!/bin/sh
+# BookOS: menú GRUB visible en el sistema instalado (deshace menu_auto_hide=1).
+grub2-editenv - unset menu_auto_hide 2>/dev/null || exit 1
+touch /var/lib/bookos-grub-firstboot.done
+EOF
+chmod 755 /usr/local/sbin/bookos-grub-firstboot
+cat > /etc/systemd/system/bookos-grub-firstboot.service <<'EOF'
+[Unit]
+Description=BookOS: asegurar menu GRUB visible en el primer arranque instalado
+ConditionKernelCommandLine=!rd.live.image
+ConditionPathExists=!/var/lib/bookos-grub-firstboot.done
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/bookos-grub-firstboot
+
+[Install]
+WantedBy=multi-user.target
+EOF
+mkdir -p /etc/systemd/system/multi-user.target.wants
+systemctl enable bookos-grub-firstboot.service 2>/dev/null || \
+    ln -sf /etc/systemd/system/bookos-grub-firstboot.service \
+        /etc/systemd/system/multi-user.target.wants/bookos-grub-firstboot.service
+
+# ── FIX instalador: limpiar los restos de la sesión LIVE en el sistema ──────
+# liveuser se crea con useradd DENTRO de esta imagen (no en runtime como hace
+# livesys-scripts en Fedora), y la instalación live copia el rootfs TAL CUAL al
+# disco. Resultado en el sistema instalado: sigue existiendo liveuser sin
+# contraseña, zz-live-autologin.conf hace que SDDM entre directo a liveuser
+# (Relogin=true) ignorando al usuario creado en Anaconda, y el icono
+# "Instalar en el disco duro" reaparece en cada escritorio nuevo vía /etc/skel.
+# Un solo script hace la limpieza; se ejecuta por DOS vías (igual que el fix
+# de GRUB de arriba): el post-script de Anaconda chrooteado en el destino y,
+# de respaldo, una unidad firstboot que no corre en live (rd.live.image) y se
+# desactiva sola. liveuser solo se borra si Anaconda creó otro usuario real;
+# si no, se bloquea (passwd -l) para que nunca quede una cuenta sin contraseña.
+cat > /usr/local/sbin/bookos-live-cleanup <<'EOF'
+#!/bin/sh
+# BookOS: retirar autologin/liveuser/lanzador del instalador tras instalar.
+rm -f /etc/sddm.conf.d/zz-live-autologin.conf
+rm -f /etc/skel/Desktop/liveinst.desktop /etc/skel/Desktop/anaconda.desktop
+rmdir /etc/skel/Desktop 2>/dev/null || true
+for d in /home/*/Desktop; do
+    rm -f "$d/liveinst.desktop" "$d/anaconda.desktop" 2>/dev/null || true
+done
+if id liveuser >/dev/null 2>&1; then
+    OTHER=$(awk -F: '$3>=1000 && $3<65534 && $1!="liveuser"{print $1; exit}' /etc/passwd)
+    if [ -n "$OTHER" ]; then
+        userdel -r liveuser 2>/dev/null || userdel liveuser 2>/dev/null || true
+        rm -rf /home/liveuser
+    else
+        passwd -l liveuser 2>/dev/null || true
+    fi
+fi
+touch /var/lib/bookos-live-cleanup.done
+EOF
+chmod 755 /usr/local/sbin/bookos-live-cleanup
+# Vía 1: post-script de Anaconda (corre chrooteado en el sistema instalado,
+# donde el script ya existe porque viaja con la copia del rootfs). Generado
+# con printf por el mismo hazard %post/%end que zz-bookos-boot.ks.
+{
+    printf '%s\n' '%post'
+    printf '%s\n' '/usr/local/sbin/bookos-live-cleanup || true'
+    printf '%s\n' '%end'
+} > /usr/share/anaconda/post-scripts/zz-bookos-live-cleanup.ks
+# Vía 2 (respaldo): primer arranque instalado, ANTES del display manager para
+# que SDDM nunca llegue a autologuear a liveuser.
+cat > /etc/systemd/system/bookos-live-cleanup.service <<'EOF'
+[Unit]
+Description=BookOS: limpiar liveuser/autologin en el primer arranque instalado
+ConditionKernelCommandLine=!rd.live.image
+ConditionPathExists=!/var/lib/bookos-live-cleanup.done
+After=local-fs.target
+Before=sddm.service display-manager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/bookos-live-cleanup
+
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl enable bookos-live-cleanup.service 2>/dev/null || \
+    ln -sf /etc/systemd/system/bookos-live-cleanup.service \
+        /etc/systemd/system/multi-user.target.wants/bookos-live-cleanup.service
+
 # ── Galaxy Book speakers: pre-build the DKMS module into the image ──────────
 # Build against the kernel shipped in the image (not the build host's running
 # kernel) so the live session and fresh installs have working speakers without
@@ -508,6 +723,31 @@ LANG=es_ES.UTF-8
 [Translations]
 LANGUAGE=es:en_US
 EOF2
+
+# ── FIX arranque: dracut 108 + systemd 259 pierde systemd-sysroot-fstab-check ─
+# En systemd 259 /usr/lib/systemd/systemd-sysroot-fstab-check pasó a ser un
+# SYMLINK a system-generators/systemd-fstab-generator. dracut-install (dracut
+# 108, fc44) resuelve el symlink e instala SOLO el destino, nunca el symlink,
+# así que el initramfs se queda sin el path que ejecuta
+# initrd-parse-etc.service (ExecStart sin "-") → 203/EXEC → OnFailure=
+# emergency.target → "Entering emergency mode" nada más montar /sysroot.
+# Afecta al initrd del live (lorax) Y a los initramfs del sistema instalado
+# (kernel updates), por eso el módulo se queda instalado en la imagen.
+# Módulo dracut que recrea el symlink a mano dentro del initramfs:
+mkdir -p /usr/lib/dracut/modules.d/99bookos-fstab-check
+cat > /usr/lib/dracut/modules.d/99bookos-fstab-check/module-setup.sh <<'EOF'
+#!/bin/bash
+# Workaround dracut 108 + systemd 259: reinstala el symlink
+# systemd-sysroot-fstab-check que dracut-install resuelve y omite.
+check() { return 0; }
+depends() { echo systemd; }
+install() {
+    inst "$systemdutildir"/system-generators/systemd-fstab-generator
+    ln -sf system-generators/systemd-fstab-generator \
+        "$initdir$systemdutildir"/systemd-sysroot-fstab-check
+}
+EOF
+chmod 0755 /usr/lib/dracut/modules.d/99bookos-fstab-check/module-setup.sh
 
 # ── Arranque más rápido ─────────────────────────────────────────────────────
 # NetworkManager-wait-online bloquea network-online.target hasta tener red
@@ -649,8 +889,8 @@ dnf clean all
 %post --erroronfail
 for p in bookos-meta bookos-branding bookos-widgets bookos-look-and-feel bookos-new bookos-shell \
          bookos-desktop-defaults bookos-desktop-integration bookos-settings \
-         bookos-store; do
+         bookos-store bookos-welcome; do
     rpm -q "$p" >/dev/null 2>&1 || { echo "✗ paquete BookOS crítico ausente: $p (¿sin publicar en el repo?)"; exit 1; }
 done
 %end
-repo --name=bookos --baseurl=file:///localrepo --cost=10
+repo --name=bookos --baseurl=https://bookos.es/repo/fedora/44/x86_64/dev/ --cost=10

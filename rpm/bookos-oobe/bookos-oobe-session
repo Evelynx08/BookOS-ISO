@@ -1,0 +1,29 @@
+#!/bin/sh
+# BookOS OOBE: sesión kiosko del asistente de primer arranque.
+# Corre como root desde bookos-oobe.service ANTES del display manager.
+# Éxito = existe un usuario real (UID>=1000, no liveuser) al terminar.
+
+has_user() {
+    awk -F: '$3>=1000 && $3<65534 && $1!="liveuser"{f=1} END{exit !f}' /etc/passwd
+}
+
+# Ya hay usuario (instalación vieja, o Anaconda lo creó) → nada que preguntar.
+if has_user; then
+    touch /var/lib/bookos-oobe.done
+    exit 0
+fi
+
+APP=/usr/libexec/bookos-oobe-app
+if command -v cage >/dev/null 2>&1; then
+    cage -s -- "$APP"
+else
+    # Fallback: kwin_wayland standalone como compositor kiosko.
+    kwin_wayland --no-lockscreen --exit-with-session "$APP"
+fi
+
+if has_user; then
+    touch /var/lib/bookos-oobe.done
+    exit 0
+fi
+# Sin usuario creado (crash/cierre): sin marker, se reintenta al próximo boot.
+exit 1

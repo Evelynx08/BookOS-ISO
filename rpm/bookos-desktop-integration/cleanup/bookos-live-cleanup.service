@@ -1,0 +1,13 @@
+[Unit]
+Description=BookOS: limpiar liveuser/autologin heredados de la sesion live
+ConditionKernelCommandLine=!rd.live.image
+ConditionPathExists=!/var/lib/bookos-live-cleanup.done
+After=local-fs.target
+Before=sddm.service display-manager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/bookos-live-cleanup
+
+[Install]
+WantedBy=multi-user.target

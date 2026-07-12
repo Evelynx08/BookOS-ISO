@@ -1,7 +1,7 @@
 Name:           bookos-widgets
 Version:        0.6.1
 # Release (no Version) sube con los fixes: bookos-meta pinea `= %%{version}`.
-Release:        6%{?dist}
+Release:        7%{?dist}
 Summary:        BookOS Plasma widgets (menu, launchpad, control station, battery…)
 License:        GPL-3.0
 URL:            https://bookos.es/
@@ -9,7 +9,7 @@ BuildArch:      noarch
 Requires:       plasma-workspace
 
 # Each .plasmoid is a zip of a plasmoid package; filename = plasmoid Id.
-# Drop them next to this spec (or point %{_sourcedir} at BookOS-Widgets/).
+# Drop them next to this spec (or point %%{_sourcedir} at BookOS-Widgets/).
 Source0:        bookos-menu.plasmoid
 Source1:        bookos-launchpad.plasmoid
 Source2:        bookos-bookbar.plasmoid
@@ -57,12 +57,14 @@ find "$PLASMOID_DIR" -type f -exec chmod 0644 {} +
 %{_datadir}/plasma/plasmoids/*
 
 %changelog
-* %(LC_ALL=C date "+%a %b %d %Y") BookOS <packages@bookos.es> - 0.6.1-3
+* Fri Jul 10 2026 BookOS <packages@bookos.es> - 0.6.1-7
+- Recaptura de widgets desde las fuentes vivas para la ISO 0.6.1
+* Mon Jul 06 2026 BookOS <packages@bookos.es> - 0.6.1-3
 - Rebuild widgets from live sources for the 0.6.1 ISO
 * Thu Jul 02 2026 BookOS <packages@bookos.es> - 0.6.1-2
 - Plasma 6.7 API fixes (batterymonitor→powerdevil requestedInhibitions,
   plasma-pa globalMuteSinks, Font.DemiBold, preferredRepresentation)
 - brightness: snap slider fixed (id/function collision)
 - launchpad: app-name cache + scored search, page culling, hover, dead code out
-* %(LC_ALL=C date "+%a %b %d %Y") BookOS <packages@bookos.es> - 0.6-1
+* Mon Jun 29 2026 BookOS <packages@bookos.es> - 0.6-1
 - Widgets refreshed for BookOS 0.6 (performance, springs, control station polish)

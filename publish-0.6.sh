@@ -33,6 +33,12 @@ files+=("$ARCH_RPMS"/bookos-shell-"$VERSION"-*.rpm)
 # noarch; con el glob versionado nunca matcheaba y se quedaba sin publicar).
 files+=("$ARCH_RPMS"/libfprint-bookos-*.rpm)
 files+=("$RPMS"/bookos-galaxybook-audio-*.rpm)
+# bookos-welcome (asistente primer arranque): x86_64 compilado en podman
+# fedora:44, versionado aparte (1.0.0); la ISO lo exige en --erroronfail.
+files+=("$ARCH_RPMS"/bookos-welcome-*.rpm)
+# kdeconnect-bookos (fork BookOS-Link con plugin netshare), si está construido.
+files+=("$ARCH_RPMS"/kdeconnect-bookos-*.rpm)
+# bookos-oobe (esqueleto PyQt6, superseded por bookos-welcome): NO se publica.
 [ ${#files[@]} -gt 0 ] || { echo "✗ no hay RPMs $VERSION en $RPMS"; echo "  (si están en otra ruta: RPMS=/ruta ./publish-0.6.sh $CHANNEL $VERSION)"; exit 1; }
 
 # ── Firmar los RPMs ────────────────────────────────────────────────────────

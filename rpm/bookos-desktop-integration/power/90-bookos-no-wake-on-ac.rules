@@ -1,0 +1,10 @@
+# BookOS: no despertar de suspensión (s2idle) al conectar/desconectar el cargador.
+#
+# En portátiles con suspend-to-idle (s2idle, el único modo en Intel modernos como
+# el Galaxy Book) cualquier fuente de wakeup armada despierta el equipo. El
+# adaptador AC (ADP1) y las fuentes USB-C PD (ucsi-source-psy-*) llegan con
+# power/wakeup=enabled, así que enchufar el cargador saca al portátil de suspensión
+# con la tapa cerrada. Ninguna de ellas hace falta para despertar (se usa
+# teclado/tapa/botón), así que las desarmamos.
+ACTION=="add", SUBSYSTEM=="power_supply", KERNEL=="ADP1", ATTR{power/wakeup}="disabled"
+ACTION=="add", SUBSYSTEM=="power_supply", KERNEL=="ucsi-source-psy-*", ATTR{power/wakeup}="disabled"
