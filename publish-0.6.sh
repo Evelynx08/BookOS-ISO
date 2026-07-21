@@ -11,8 +11,10 @@ CHANNEL="${1:-dev}"
 # Versión por defecto = la del spec de bookos-meta (fuente de verdad del
 # release), así el default no se desincroniza cuando suben los specs.
 VERSION="${2:-$(awk '/^Version:/{print $2; exit}' "$(dirname "$0")/rpm/bookos-meta.spec")}"
-NAS="${NAS:-evelynx08@A5-NAS}"
+NAS="${NAS:-evelynx08@192.168.18.227}"
 REPO="/var/www/html/public/repo/fedora/44/x86_64/${CHANNEL}"
+# Misma URL que el gpgkey= de los .repo: contra esta clave se verifica al final.
+PUBKEY_URL="${PUBKEY_URL:-https://bookos.es/api/pubkey.php?type=gpg}"
 # Resolver el home real aunque se ejecute con sudo (evita /root/rpmbuild vacío)
 USER_HOME="${SUDO_USER:+/home/$SUDO_USER}"
 RPMROOT="${RPMROOT:-${USER_HOME:-$HOME}/rpmbuild/RPMS}"
@@ -41,27 +43,68 @@ files+=("$ARCH_RPMS"/kdeconnect-bookos-*.rpm)
 # bookos-oobe (esqueleto PyQt6, superseded por bookos-welcome): NO se publica.
 [ ${#files[@]} -gt 0 ] || { echo "✗ no hay RPMs $VERSION en $RPMS"; echo "  (si están en otra ruta: RPMS=/ruta ./publish-0.6.sh $CHANNEL $VERSION)"; exit 1; }
 
-# ── Firmar los RPMs ────────────────────────────────────────────────────────
-# Los repos instalados tienen gpgcheck=1, así que los paquetes DEBEN ir firmados
-# o dnf los rechazará en los dispositivos. La clave pública se sirve en
-# https://bookos.es/api/pubkey.php?type=gpg (el gpgkey= de los .repo) para que el
-# primer install/upgrade la importe solo. SIGN=0 omite la firma (NO recomendado).
-GPG_NAME="${BOOKOS_GPG_NAME:-$(rpm --eval '%{?_gpg_name}')}"
-if [ "${SIGN:-1}" != "0" ]; then
-    [ -n "$GPG_NAME" ] || { echo "✗ Sin clave GPG: define _gpg_name en ~/.rpmmacros o BOOKOS_GPG_NAME=…  (o SIGN=0 para omitir, romperá gpgcheck=1)"; exit 1; }
-    command -v rpmsign >/dev/null || { echo "✗ falta rpmsign: sudo dnf install rpm-sign"; exit 1; }
-    echo "→ Firmando ${#files[@]} RPMs con '$GPG_NAME'…"
-    rpmsign --define "_gpg_name $GPG_NAME" --addsign "${files[@]}"
-else
-    echo "⚠ SIGN=0: subiendo RPMs SIN firmar — gpgcheck=1 los rechazará en los dispositivos."
+# ── Los RPMs se firman EN EL NAS, no aquí ──────────────────────────────────
+# La clave de release ("BookOS Release Signing") vive solo en el keyring del NAS
+# y no debe salir de ahí. Aquí NO se firma: los paquetes suben SIN firma.
+#
+# Por qué importa: el NAS corre rpm 4.20, que al firmar escribe RPMTAG_OPENPGP
+# solo si el paquete no traía ya uno — y --delsign tampoco sabe borrarlo. Si un
+# RPM llega firmado desde aquí (rpm 6 escribe ese tag), el NAS le añade encima su
+# RSAHEADER pero la firma vieja se queda dentro, y Fedora 44 —que verifica
+# RPMTAG_OPENPGP— lo rechaza con "Importación de la clave no ayuda, ¿clave
+# incorrecta?". Por eso abortamos si algo llega firmado.
+GPG_NAME="${BOOKOS_GPG_NAME:-BookOS Release Signing}"
+
+echo "→ Comprobando que ningún RPM lleve firma previa…"
+presigned=()
+for f in "${files[@]}"; do
+    sig=$(rpm -qp --nosignature --qf '%{RSAHEADER:pgpsig}%{OPENPGP}' "$f" 2>/dev/null)
+    case "$sig" in *"(none)(none)"*) ;; *) presigned+=("$(basename "$f")") ;; esac
+done
+if [ ${#presigned[@]} -gt 0 ]; then
+    echo "✗ Estos RPMs ya vienen firmados y el NAS no podrá limpiar la firma vieja:"
+    printf '    %s\n' "${presigned[@]}"
+    echo "  Quítales la firma con rpm >= 6 antes de publicar:"
+    echo "      rpmsign --delsign <esos .rpm>"
+    exit 1
 fi
+echo "  ✓ los ${#files[@]} van sin firmar"
 
 echo "→ Subiendo ${#files[@]} RPMs a /tmp del NAS…"
 scp "${files[@]}" "$NAS:/tmp/"
 
-echo "→ Moviendo al repo + createrepo_c (pide sudo en el NAS)…"
+echo "→ Firmando en el NAS + moviendo al repo + createrepo_c (pide sudo en el NAS)…"
 names=$(printf '/tmp/%s ' $(basename -a "${files[@]}"))
-ssh -t "$NAS" "sudo mkdir -p '$REPO' && sudo mv $names '$REPO/' && sudo createrepo_c '$REPO' && sudo chown -R www-data:www-data '$REPO'"
+# rpmsign va SIN sudo: la clave está en el keyring del usuario, no en el de root.
+ssh -t "$NAS" "set -e
+    rpmsign --define '_gpg_name $GPG_NAME' --addsign $names
+    sudo mkdir -p '$REPO'
+    sudo mv $names '$REPO/'
+    sudo createrepo_c '$REPO'
+    sudo chown -R www-data:www-data '$REPO'"
 
-echo "✓ Publicado. Comprueba:"
-echo "  curl -sI https://bookos.es/repo/fedora/44/x86_64/$CHANNEL/repodata/repomd.xml | head -1"
+# ── Verificar lo YA publicado, con el rpm de esta máquina ──────────────────
+# Esta máquina es Fedora (rpm >= 6): verifica RPMTAG_OPENPGP igual que lo hará el
+# dnf de los usuarios. Es la única comprobación que de verdad predice si un
+# cliente aceptará el paquete — el rpm 4 del NAS diría "OK" aunque estuviera mal.
+BASEURL="https://bookos.es/repo/fedora/44/x86_64/$CHANNEL"
+echo "→ Verificando las firmas publicadas contra $PUBKEY_URL…"
+vdb=$(mktemp -d); trap 'rm -rf "$vdb"' EXIT
+curl -fsS "$PUBKEY_URL" -o "$vdb/pubkey.asc"
+rpmkeys --dbpath="$vdb" --import "$vdb/pubkey.asc"
+bad=0
+for f in $(basename -a "${files[@]}"); do
+    if ! curl -fsS "$BASEURL/$f" -o "$vdb/p.rpm"; then
+        echo "  ✗ $f — no se pudo descargar del repo"; bad=1; continue
+    fi
+    if ! rpmkeys --dbpath="$vdb" --checksig "$vdb/p.rpm" >/dev/null 2>&1; then
+        echo "  ✗ $f — FIRMA INCORRECTA (los clientes lo rechazarán)"; bad=1
+    fi
+done
+if [ "$bad" -ne 0 ]; then
+    echo "✗ Hay paquetes publicados con firma inválida. NO anuncies esta versión."
+    exit 1
+fi
+
+echo "✓ Publicado y verificado: los ${#files[@]} RPMs validan con la clave que sirve el servidor."
+echo "  curl -sI $BASEURL/repodata/repomd.xml | head -1"

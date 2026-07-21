@@ -1,6 +1,6 @@
 Name:           bookos-branding
 Version:        0.6.1
-Release:        6%{?dist}
+Release:        7%{?dist}
 Summary:        BookOS branding (logos, wallpapers, SDDM/Plymouth themes)
 License:        GPL-3.0
 URL:            https://bookos.es/
@@ -10,9 +10,13 @@ Requires:       sddm
 Requires:       plymouth
 
 Provides:       system-logos
-Provides:       system-release
 Conflicts:      fedora-logos
 Conflicts:      generic-logos
+# OJO: NO declarar «Provides: system-release». dnf deduce $releasever del paquete
+# que provee system-release, y fedora-release lo hace versionado —system-release(44)—.
+# Al proveerlo aquí sin versión, dnf tomaba la versión de este paquete y resolvía
+# $releasever=0.6.1, con lo que Fedora y RPM Fusion devolvían 404 y el sistema se
+# quedaba SIN actualizaciones de seguridad. El branding solo debe proveer system-logos.
 
 %description
 BookOS branding: replaces Fedora default logos, wallpapers, login screen,
