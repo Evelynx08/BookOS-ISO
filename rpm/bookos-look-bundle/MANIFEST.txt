@@ -1,5 +1,5 @@
 Global look-and-feel: 'BookOS Dark'  (/home/evelyn/.local/share/plasma/look-and-feel/BookOS Dark)
-Resolved: icons=BookOS-Tinted cursor=MacTahoe-dark colors=BookOSDark plasma=bookos-dark deco=BookOS-App-Dark kvantum=bookos-dark-blue gtk=catppuccin-bookos-light-blue-standard+default
+Resolved: icons=BookOS-Tinted cursor=MacTahoe-dark colors=BookOSDark plasma=bookos-dark deco=BookOS-App-Dark kvantum=bookos-dark-blue gtk=BookOS-Light
 
 [ global theme(s) ]
   + plasma/look-and-feel/BookOS Dark  236K  (local)
@@ -15,7 +15,7 @@ Resolved: icons=BookOS-Tinted cursor=MacTahoe-dark colors=BookOSDark plasma=book
 [ kvantum ]
   + Kvantum/bookos-dark-blue  160K  (local)
 [ gtk theme ]
-  + themes/catppuccin-bookos-light-blue-standard+default  1,9M  (local)
+  + themes/BookOS-Light  1,9M  (local)
 [ color scheme ]
   + color-schemes/BookOSDarkBlue.colors
   + color-schemes/BookOSDark.colors

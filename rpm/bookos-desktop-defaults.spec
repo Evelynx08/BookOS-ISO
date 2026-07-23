@@ -20,7 +20,7 @@ Requires:       bookos-widgets
 %description
 Bundles every asset the BookOS desktop look depends on — the BookOS global
 look-and-feel themes, the bookos-dark Plasma style, the BookOS aurorae window
-decoration, the bookos kvantum style, the catppuccin-bookos GTK theme and
+decoration, the bookos kvantum style, the BookOS-Light GTK theme and
 BookOS color schemes — and the resolved Plasma config in /etc/skel so every new
 user (and the live session) boots into the full BookOS appearance instead of
 plain Breeze. (Cursor theme and fonts are intentionally NOT shipped — BookOS
