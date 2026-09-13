@@ -25,6 +25,9 @@ API="${API:-https://bookos.es/api/admin.php}"
 KEYFILE="${KEYFILE:-$HOME/.config/bookos/apikey}"
 
 [ -f "$ISO" ] || { echo "✗ no existe: $ISO"; exit 1; }
+# Verify before uploading or reading the API credential. Never publish an ISO
+# with a missing/stale signature from a previous build.
+bash "$(dirname "$0")/check-artifacts.sh" iso "$ISO"
 [ -f "$KEYFILE" ] || { echo "✗ falta $KEYFILE (crea una API key en el panel admin, apikey_create)"; exit 1; }
 APIKEY="$(<"$KEYFILE")"
 

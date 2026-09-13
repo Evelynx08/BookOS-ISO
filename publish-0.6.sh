@@ -23,25 +23,37 @@ ARCH_RPMS="${ARCH_RPMS:-$RPMROOT/$(uname -m)}"
 
 echo "→ Canal: $CHANNEL · Versión: $VERSION · Destino: $NAS:$REPO"
 
-# RPMs a subir (los que existan para esta versión)
+# RPMs a subir: EXACTAMENTE los que entraron en la ISO, es decir, el repo
+# candidato que dejan iso/check-packages-in-podman.sh y iso/build-apps-in-podman.sh.
+#
+# Antes esto era una lista de nombres escrita a mano con globs por $VERSION, y
+# se quedó vieja sin avisar: faltaban bookos-desktop, bookos-explorer, calc,
+# clock, notepad y store, y settings/player/viewer se buscaban entre los noarch
+# cuando son binarios Tauri x86_64. Con `nullglob` eso no falla: sube media
+# release en silencio. Leer el repo evita tener que acordarse de cada app nueva.
 shopt -s nullglob
-# noarch: temas/widgets/apps, atados a la versión del release.
-files=("$RPMS"/bookos-{branding,widgets,icons,plasma-theme,gtk-theme,look-and-feel,desktop-defaults,meta,settings,viewer,player,desktop-integration}-"$VERSION"-*.rpm)
-# bookos-new es x86_64 (binario Tauri): sale de ARCH_RPMS, no de noarch
-files+=("$ARCH_RPMS"/bookos-new-"$VERSION"-*.rpm)
-files+=("$ARCH_RPMS"/bookos-shell-"$VERSION"-*.rpm)
-# Versionados aparte del release — se recogen por nombre, no por $VERSION:
-# libfprint-bookos (1.94.9, compilado) y bookos-galaxybook-audio (1.0, DKMS
-# noarch; con el glob versionado nunca matcheaba y se quedaba sin publicar).
-files+=("$ARCH_RPMS"/libfprint-bookos-*.rpm)
-files+=("$RPMS"/bookos-galaxybook-audio-*.rpm)
-# bookos-welcome (asistente primer arranque): x86_64 compilado en podman
-# fedora:44, versionado aparte (1.0.0); la ISO lo exige en --erroronfail.
-files+=("$ARCH_RPMS"/bookos-welcome-*.rpm)
-# kdeconnect-bookos (fork BookOS-Link con plugin netshare), si está construido.
-files+=("$ARCH_RPMS"/kdeconnect-bookos-*.rpm)
-# bookos-oobe (esqueleto PyQt6, superseded por bookos-welcome): NO se publica.
-[ ${#files[@]} -gt 0 ] || { echo "✗ no hay RPMs $VERSION en $RPMS"; echo "  (si están en otra ruta: RPMS=/ruta ./publish-0.6.sh $CHANNEL $VERSION)"; exit 1; }
+CANDIDATOS="${CANDIDATOS:-$(dirname "$0")/.build/package-check/repo}"
+[ -d "$CANDIDATOS" ] || { echo "✗ no existe $CANDIDATOS (construye antes: iso/check-packages-in-podman.sh)"; exit 1; }
+
+# Y no todo el directorio, sino lo que la ISO cogió DE AHÍ: el informe de
+# resolución dice, paquete a paquete, si ganó el candidato local o el que ya
+# está publicado. Subir el directorio entero publicaría versiones más viejas
+# que las del canal (el repo local guarda bookos-widgets-0.6.1-8 mientras el
+# servidor sirve la -9, que es la que usó la ISO).
+RESOLUCION="${RESOLUCION:-$(dirname "$0")/.build/package-check/dependency-resolution.log}"
+[ -f "$RESOLUCION" ] || { echo "✗ falta $RESOLUCION (corre antes iso/check-packages-in-podman.sh)"; exit 1; }
+
+# Columnas de la tabla de dnf: nombre arch epoch:version-release repo tamaño.
+mapfile -t files < <(
+    awk '$2 ~ /^(noarch|x86_64|i686)$/ && $3 ~ /^[0-9]+:/ && $4 == "bookos-candidate" {
+             evr = $3; sub(/^[0-9]+:/, "", evr); print $1 "-" evr "." $2 ".rpm"
+         }' "$RESOLUCION" | sort -u | while read -r fichero; do
+        [ -f "$CANDIDATOS/$fichero" ] && printf '%s\n' "$CANDIDATOS/$fichero"
+    done
+)
+[ ${#files[@]} -gt 0 ] || { echo "✗ el informe no lista ningún paquete local; ¿está al día?"; exit 1; }
+echo "→ ${#files[@]} paquetes desde $CANDIDATOS:"
+printf '    %s\n' "${files[@]##*/}"
 
 # ── Los RPMs se firman EN EL NAS, no aquí ──────────────────────────────────
 # La clave de release ("BookOS Release Signing") vive solo en el keyring del NAS

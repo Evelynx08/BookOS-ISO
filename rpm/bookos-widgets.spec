@@ -1,11 +1,13 @@
 Name:           bookos-widgets
 Version:        0.6.1
 # Release (no Version) sube con los fixes: bookos-meta pinea `= %%{version}`.
-Release:        7%{?dist}
+Release:        8%{?dist}
 Summary:        BookOS Plasma widgets (menu, launchpad, control station, battery…)
 License:        GPL-3.0
 URL:            https://bookos.es/
 BuildArch:      noarch
+BuildRequires:  gettext
+BuildRequires:  unzip
 Requires:       plasma-workspace
 
 # Each .plasmoid is a zip of a plasmoid package; filename = plasmoid Id.
@@ -45,6 +47,15 @@ for src in %{SOURCE0} %{SOURCE1} %{SOURCE2} %{SOURCE3} %{SOURCE4} %{SOURCE5} %{S
     [ -z "$id" ] && id=$(basename "$src" .plasmoid)
     mkdir -p "$PLASMOID_DIR/$id"
     cp -a "$tmp"/. "$PLASMOID_DIR/$id/"
+    # Plasma loads translations from the global locale path under the actual
+    # packaged plugin ID, not the original development ID or the .po filename.
+    for po in "$tmp"/po/*.po; do
+        [ -f "$po" ] || continue
+        lang=$(basename "$po" .po)
+        locale_dir=%{buildroot}%{_datadir}/locale/"$lang"/LC_MESSAGES
+        mkdir -p "$locale_dir"
+        msgfmt "$po" -o "$locale_dir/plasma_applet_$id.mo"
+    done
     rm -rf "$tmp"
 done
 # mktemp -d crea el staging 0700 y `cp -a tmp/.` copia ese modo al directorio
@@ -55,6 +66,7 @@ find "$PLASMOID_DIR" -type f -exec chmod 0644 {} +
 
 %files
 %{_datadir}/plasma/plasmoids/*
+%{_datadir}/locale/*/LC_MESSAGES/plasma_applet_bookos-*.mo
 
 %changelog
 * Fri Jul 10 2026 BookOS <packages@bookos.es> - 0.6.1-7

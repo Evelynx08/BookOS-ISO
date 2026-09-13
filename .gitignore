@@ -10,3 +10,5 @@ iso/anaconda/
 *.iso
 *.iso.sha256
 *.iso.minisig
+.build/
+__pycache__/

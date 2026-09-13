@@ -1,7 +1,7 @@
 Name:           bookos-desktop-integration
 Version:        0.6.1
 # Release (no Version) sube con los añadidos: bookos-meta pinea `= %%{version}`.
-Release:        7%{?dist}
+Release:        8%{?dist}
 Summary:        BookOS desktop integration — ServiceMenus (terminal, folder colors), KRunner plugins (system actions, weather), Live States
 License:        GPL-3.0
 URL:            https://bookos.es/
@@ -14,7 +14,7 @@ Source0:        %{name}-%{version}.tar.gz
 Requires:       python3-dbus
 Requires:       python3-gobject
 # Terminal ServiceMenu prefers bookos-shell, falls back to konsole.
-Requires:       konsole
+Requires:       bookos-shell
 # Folder colors reuse Papirus folder-<color> icons (already pulled by bookos-icons).
 Requires:       papirus-icon-theme
 # Touchpad gestures daemon (bundled upstream script) reads events via

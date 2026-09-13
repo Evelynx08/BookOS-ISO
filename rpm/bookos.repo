@@ -1,0 +1,20 @@
+[bookos]
+name=BookOS Apps
+baseurl=https://bookos.es/store-files/
+enabled=1
+# gpgcheck=1 verifica la firma de CADA paquete. Es lo que impide instalar
+# software manipulado, y es la protección que de verdad importa.
+gpgcheck=1
+# repo_gpgcheck=0, igual que los repos oficiales de Fedora. Con él a 1, dnf
+# mantiene un llavero propio para los metadatos y pregunta "Is this ok [y/N]"
+# la primera vez, aunque la clave ya esté en la base de datos de rpm — justo el
+# diálogo que se quiere evitar. Los metadatos siguen llegando por HTTPS y, aun
+# manipulándolos, no se puede colar un paquete sin firma válida.
+# El repomd.xml SÍ se firma al publicar, así que quien quiera esta comprobación
+# extra solo tiene que poner 1 aquí.
+repo_gpgcheck=0
+# Fichero local instalado por bookos-keyring, nunca una URL: descargar la clave
+# del mismo servidor que sirve los paquetes no aporta ninguna garantía.
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-bookos
+metadata_expire=300
+skip_if_unavailable=True

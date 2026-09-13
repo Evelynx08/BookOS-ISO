@@ -1,6 +1,6 @@
 Name:           bookos-icons
 Version:        0.6.1
-Release:        1%{?dist}
+Release:        3%{?dist}
 Summary:        BookOS icon themes (Dark, Light, Tinted-Dark, Tinted-Light)
 License:        GPL-3.0
 URL:            https://bookos.es/
@@ -30,6 +30,8 @@ for pack in BookOS-Icon-Pack-*/; do
     name="${name:-$(basename "$pack")}"
     rm -rf "$DEST/$name"
     cp -r "$pack" "$DEST/$name"
+    mkdir -p %{buildroot}%{_datadir}/bookos/icons
+    ln -s ../../icons/"$name" %{buildroot}%{_datadir}/bookos/icons/"${pack%/}"
     rm -f "$DEST/$name/generador.py"     # ship the icons, not the generator
 done
 
@@ -40,6 +42,7 @@ done
 ) > %{_builddir}/%{name}-files.list
 
 %files -f %{_builddir}/%{name}-files.list
+%{_datadir}/bookos/icons
 
 %post
 for n in BookOS-Dark BookOS-Light BookOS-Tinted-Dark BookOS-Tinted-Light; do
@@ -47,5 +50,9 @@ for n in BookOS-Dark BookOS-Light BookOS-Tinted-Dark BookOS-Tinted-Light; do
 done
 
 %changelog
+* Sun Sep 13 2026 BookOS <packages@bookos.es> - 0.6.1-3
+- Icono de Archivos (bookos-explorer) en las cuatro variantes. El tema ya traía
+  el del resto de apps de BookOS y esta se quedaba con el de hicolor, que el
+  tema pisa: en el dock y el menú salía descolgada del conjunto.
 * Fri Jun 19 2026 BookOS <packages@bookos.es> - 0.6-1
 - Initial: BookOS Dark/Light/Tinted icon themes

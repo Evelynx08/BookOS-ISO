@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npm config:*)",
+      "Bash(sudo npm:*)",
+      "Bash(claude *)",
+      "Bash(php -l api/admin.php)",
+      "Bash(7z l *)",
+      "Bash(rm -rf lookchk)",
+      "Bash(mkdir lookchk *)",
+      "Bash(tar --use-compress-program=unzstd -xf /home/evelyn/Descargas/BookOS/BookOS-ISO/rpm/bookos-look-bundle.tar.zst -C lookchk)",
+      "Bash(ls share/plasma/look-and-feel/)",
+      "Bash(find share/plasma/look-and-feel -name '*layout*')",
+      "Bash(grep -rln 'plugin=' skel)",
+      "PowerShell(Get-VM *)"
+    ]
+  }
+}

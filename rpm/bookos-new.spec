@@ -1,5 +1,5 @@
 Name:           bookos-new
-Version:        0.6.1
+Version:        0.6.2
 Release:        2%{?dist}
 Summary:        BookOS "¿Qué hay nuevo?" — novedades de la versión al primer inicio
 License:        GPL-3.0

@@ -1,6 +1,6 @@
 Name:           bookos-meta
 Version:        0.6.1
-Release:        2%{?dist}
+Release:        4%{?dist}
 Summary:        BookOS umbrella package — pulls the full BookOS stack
 License:        GPL-3.0
 URL:            https://bookos.es/
@@ -9,9 +9,11 @@ BuildArch:      noarch
 # ── System identity / look: PINNED to this exact release (macOS model) ──
 # A version bump forces every visual piece to the SAME version atomically,
 # so upgrading 0.5 → 0.6 brings the whole redesign in one dnf transaction.
-Requires:       bookos-branding      = %{version}
+Requires:       bookos-branding      >= 0.6.1-11
 Requires:       bookos-widgets       = %{version}
 Requires:       bookos-icons         = %{version}
+Requires:       bookos-icons         >= 0.6.1-2
+Requires:       bookos-widgets       >= 0.6.1-8
 Requires:       bookos-plasma-theme  = %{version}
 Requires:       bookos-gtk-theme     = %{version}
 Requires:       bookos-look-and-feel = %{version}
@@ -19,22 +21,30 @@ Requires:       bookos-look-and-feel = %{version}
 # applied config) — without this the desktop falls back to plain Breeze.
 Requires:       bookos-desktop-defaults = %{version}
 # Integración de escritorio (ServiceMenus terminal/color + runners KRunner).
-Requires:       bookos-desktop-integration = %{version}
+Requires:       bookos-desktop-integration >= 0.6.1-8
+Requires:       bookos-desktop >= 0.1.0
 # (sddm + wallpapers se entregan dentro de bookos-branding)
 
 # ── Apps: con versión propia, solo necesitan un mínimo (no atadas al salto) ──
 # Mínimos alineados con lo realmente publicado en store-files (subir cuando se
 # publique una versión mayor de la app correspondiente).
-Requires:       bookos-settings   >= 0.4.3
-Requires:       bookos-store      >= 0.3.0
-Requires:       bookos-calc       >= 0.1.0
-Requires:       bookos-clock      >= 0.6.0
-Requires:       bookos-notepad    >= 0.1.0
+Requires:       bookos-settings   >= 0.6.2
+Requires:       bookos-store      >= 0.6.2
+Requires:       bookos-calc       >= 0.6.2
+Requires:       bookos-clock      >= 0.6.2
+Requires:       bookos-notepad    >= 0.6.2
+Requires:       bookos-shell      >= 0.6.2
+Requires:       bookos-player     >= 0.6.2
+Requires:       bookos-new        >= 0.6.2
+Requires:       bookos-explorer   >= 0.6.2
+Requires:       bookos-welcome
+Requires:       bookos-keyring
 # KDE base
 Requires:       plasma-workspace
 Requires:       sddm
 Requires:       dolphin
-Requires:       konsole
+Requires:       firefox
+Requires:       kde-partitionmanager
 
 %description
 Umbrella package for the BookOS desktop. Installing or upgrading bookos-meta

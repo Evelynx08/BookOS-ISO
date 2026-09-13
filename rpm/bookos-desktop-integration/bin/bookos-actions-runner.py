@@ -3,7 +3,7 @@
 Implementa org.kde.krunner1 (Plasma 6) por D-Bus.
 Escribe 'wifi', 'bluetooth', 'no molestar', 'rendimiento', 'bloquear', etc.
 """
-import sys, os, subprocess
+import sys, os, subprocess, shutil
 import dbus, dbus.service, dbus.mainloop.glib
 from gi.repository import GLib
 
@@ -35,7 +35,7 @@ ACTIONS = [
     ("lock",      "Bloquear pantalla",      "system-lock-screen",      ["bloquear","lock","bloqueo"],         lambda: run(["loginctl","lock-session"])),
     ("shot",      "Captura de pantalla",    "spectacle",               ["captura","screenshot","pantalla"],  lambda: run(["spectacle","-r"])),
     ("suspend",   "Suspender",              "system-suspend",          ["suspender","dormir","sleep"],       lambda: run(["systemctl","suspend"])),
-    ("logout",    "Cerrar sesión",          "system-log-out",          ["cerrar sesion","cerrar sesión","logout","salir"], lambda: run(["qdbus6","org.kde.Shutdown","/Shutdown","logout"])),
+    ("logout",    "Cerrar sesión",          "system-log-out",          ["cerrar sesion","cerrar sesión","logout","salir"], lambda: run(["gdbus", "call", "--session", "--dest", "org.kde.Shutdown", "--object-path", "/Shutdown", "--method", "org.kde.Shutdown.logout"])),
 ]
 _BY_ID = {a[0]: a for a in ACTIONS}
 
@@ -48,6 +48,8 @@ class ActionsRunner(dbus.service.Object):
             return []
         out = []
         for aid, label, icon, keywords, _ in ACTIONS:
+            if aid == "shot" and not shutil.which("spectacle"):
+                continue
             score = 0.0
             if any(q == k for k in keywords): score = 1.0
             elif any(q in k or k in q for k in keywords): score = 0.8

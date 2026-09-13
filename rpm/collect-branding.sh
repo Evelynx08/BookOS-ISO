@@ -10,7 +10,7 @@ VERSION="${1:-0.6}"
 # Repo root = two levels up from this script (…/BookOS/BookOS-ISO/rpm → …/BookOS)
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 STAGE="$(mktemp -d)/bookos-branding-${VERSION}"
-mkdir -p "$STAGE"/{logos,wallpapers,sddm-theme,plymouth-theme,lockscreen,anaconda,fonts}
+mkdir -p "$STAGE"/{logos,wallpapers,sddm-theme,plymouth-theme,grub-theme,lockscreen,anaconda,fonts}
 
 say(){ printf '  %s\n' "$*"; }
 warn(){ printf '  ⚠ %s\n' "$*" >&2; }
@@ -62,12 +62,32 @@ else
 fi
 
 # ── Lockscreen QML ──────────────────────────────────────────────────────
-if compgen -G "$ROOT/BookOS-Settings/src-tauri/extra/lockscreen/*.qml" >/dev/null; then
-    cp "$ROOT"/BookOS-Settings/src-tauri/extra/lockscreen/*.qml "$STAGE/lockscreen/"
+# bookos-branding es el ÚNICO dueño de /usr/share/bookos-settings/lockscreen/.
+# bookos-settings los empaquetaba también, y en cuanto los dos dejaron de salir
+# del mismo commit sus copias divergieron: rpm solo tolera un fichero duplicado
+# si es byte a byte idéntico, así que la transacción entera de la ISO abortaba
+# con "The transaction process has ended with errors".
+EXTRA_QML="$ROOT/BookOS-Settings/src-tauri/extra"
+if compgen -G "$EXTRA_QML/lockscreen/*.qml" >/dev/null; then
+    cp "$EXTRA_QML"/lockscreen/*.qml "$STAGE/lockscreen/"
     say "lockscreen: copied QML"
 else
     warn "no lockscreen QML found"
 fi
+
+# Los widgets (batería/tiempo/fecha) son EL MISMO componente que usa el tema
+# SDDM, parametrizado por propiedades, y por eso viven en sddm-theme/ en vez de
+# duplicarse en lockscreen/: dos copias divergen en cuanto se toca una.
+# LockScreenUi.qml instancia GreeterWidgets{}, y QML resuelve los componentes por
+# nombre de fichero DENTRO DEL MISMO DIRECTORIO — sin estos cuatro, el lockscreen
+# no carga. Se aborta en vez de avisar: publicar un lockscreen que no arranca es
+# peor que no publicar nada.
+for w in GreeterWidgets WxIcon DeviceIcon GlyphIcon; do
+    src="$EXTRA_QML/sddm-theme/$w.qml"
+    [ -f "$src" ] || { warn "falta $src — el lockscreen no cargaría sin él"; exit 1; }
+    cp -f "$src" "$STAGE/lockscreen/"
+done
+say "lockscreen: + widgets compartidos con el tema SDDM"
 
 # ── Plymouth boot splash ────────────────────────────────────────────────
 # NOTE: BookOS-Loading-System currently holds a Plasma *splash* (look-and-feel
@@ -99,6 +119,24 @@ EOF
     [ -f "$STAGE/logos/bookos.png" ] && cp "$STAGE/logos/bookos.png" "$STAGE/plymouth-theme/logo.png" || true
 fi
 
+# ── Tema de GRUB (menú de arranque) ─────────────────────────────────────
+# A diferencia del de Plymouth, aquí NO hay fallback generado: un theme.txt
+# improvisado se ve peor que el texto plano de GRUB, y el post-script de
+# Anaconda solo pone GRUB_THEME si el fichero existe. Sin BookOS-GRUB, el menú
+# queda en texto —correcto, solo que sin diseño— y el %post --erroronfail del
+# kickstart aborta el build de la ISO para que nadie lo publique sin querer.
+if [ -f "$ROOT/BookOS-GRUB/theme.txt" ]; then
+    cp -r "$ROOT/BookOS-GRUB/." "$STAGE/grub-theme/"
+    # Los scripts generadores no pintan nada dentro del RPM.
+    rm -f "$STAGE/grub-theme/build-assets.py" \
+          "$STAGE/grub-theme/build-fonts.sh" \
+          "$STAGE/grub-theme/README.md"
+    rm -rf "$STAGE/grub-theme/.git"
+    say "grub-theme: copied ($(find "$STAGE/grub-theme" -type f | wc -l) ficheros)"
+else
+    warn "NO hay tema de GRUB ($ROOT/BookOS-GRUB/theme.txt) — el menú de arranque saldrá en texto plano"
+fi
+
 # ── Fuentes (Nunito OFL, sustituye SN Pro) ──────────────────────────────
 if [ -d "$ROOT/BookOS-Fonts" ]; then
     cp -r "$ROOT/BookOS-Fonts/." "$STAGE/fonts/"
@@ -112,7 +150,16 @@ if [ -d "$ROOT/BookOS-Anaconda" ]; then
     # product.d/bookos.conf drives the installer's btrfs default partitioning
     # AND the official WebUI stylesheet — without it Anaconda falls back to
     # ext4 + plain look.
-    [ -d "$ROOT/BookOS-Anaconda/product.d" ] && cp -r "$ROOT/BookOS-Anaconda/product.d" "$STAGE/anaconda/product.d"
+    if [ -d "$ROOT/BookOS-Anaconda/product.d" ]; then
+        cp -r "$ROOT/BookOS-Anaconda/product.d" "$STAGE/anaconda/product.d"
+        # Anaconda uses [Product] for the visible installer name. Older
+        # checkouts only had the profile/storage sections and inherited
+        # "Fedora 44" from the base profile.
+        profile="$STAGE/anaconda/product.d/bookos.conf"
+        if ! grep -q '^product_name[[:space:]]*=[[:space:]]*BookOS$' "$profile"; then
+            sed -i '1i\[Product]\nproduct_name = BookOS\n\n[Base Product]\nproduct_name = Fedora\n' "$profile"
+        fi
+    fi
     [ -d "$ROOT/BookOS-Anaconda/addon" ]     && cp -r "$ROOT/BookOS-Anaconda/addon"     "$STAGE/anaconda/addon"
     say "anaconda: pixmaps + theme CSS + product.d + addon"
 else
@@ -123,7 +170,7 @@ fi
 # Resolve the real user's home even under sudo, so the tarball lands where the
 # non-root `rpmbuild` reads from (not /root/rpmbuild/SOURCES).
 USER_HOME="${SUDO_USER:+/home/$SUDO_USER}"
-OUT="${USER_HOME:-$HOME}/rpmbuild/SOURCES/bookos-branding-${VERSION}.tar.gz"
+OUT="${RPM_TOPDIR:-${USER_HOME:-$HOME}/rpmbuild}/SOURCES/bookos-branding-${VERSION}.tar.gz"
 mkdir -p "$(dirname "$OUT")"
 tar -C "$(dirname "$STAGE")" -czf "$OUT" "bookos-branding-${VERSION}"
 rm -rf "$(dirname "$STAGE")"
