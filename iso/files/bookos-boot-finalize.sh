@@ -40,6 +40,9 @@ if [ -d /sys/firmware/efi ]; then
 fi
 
 plymouth-set-default-theme bookos
+# Anaconda ya escribió /etc/locale.conf: el dracut de abajo mete el splash en
+# el idioma elegido al instalar.
+/usr/libexec/bookos-plymouth-language
 dracut -f --regenerate-all
 /usr/libexec/bookos-apply-identity
 

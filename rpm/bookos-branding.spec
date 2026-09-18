@@ -1,6 +1,6 @@
 Name:           bookos-branding
 Version:        0.6.2
-Release:        2%{?dist}
+Release:        3%{?dist}
 Summary:        BookOS branding (logos, wallpapers, SDDM/Plymouth themes)
 License:        GPL-3.0
 URL:            https://bookos.es/
@@ -323,6 +323,77 @@ exit 0
 IDENT
 chmod 755 %{buildroot}/usr/libexec/bookos-apply-identity
 
+# ── Idioma del splash de arranque ───────────────────────────────────────────
+cat > %{buildroot}/usr/libexec/bookos-plymouth-language <<'LANGSH'
+#!/bin/sh
+# BookOS: pone el splash de arranque en el idioma del sistema.
+#
+# El script de Plymouth no puede averiguarlo solo: corre dentro del initramfs y
+# su intérprete no expone ni el entorno ni ficheros. Así que el idioma va escrito
+# en una línea del propio script (LANGUAGE = "es";) y este programa la reescribe
+# según /etc/locale.conf. Español si LANG empieza por «es» o no está definido
+# (es el idioma por defecto de BookOS); inglés en cualquier otro caso.
+#
+#   --regenerate   si el idioma cambió, regenera el initramfs para que el
+#                  cambio llegue al próximo arranque (tarda unos segundos)
+#
+# Nunca debe hacer fallar una transacción de rpm.
+
+set -u
+
+SCRIPT=/usr/share/plymouth/themes/bookos/bookos.script
+[ -w "$SCRIPT" ] || exit 0
+
+lang="$(sed -n 's/^LANG=//p' /etc/locale.conf 2>/dev/null | head -n1 | tr -d '"')"
+case "$lang" in
+    ''|es*) want=es ;;
+    *)      want=en ;;
+esac
+
+current="$(sed -n 's/^LANGUAGE = "\([a-z]*\)";$/\1/p' "$SCRIPT")"
+[ "$current" = "$want" ] && exit 0
+
+sed -i "s/^LANGUAGE = \"[a-z]*\";\$/LANGUAGE = \"$want\";/" "$SCRIPT" || exit 0
+
+if [ "${1:-}" = --regenerate ]; then
+    plymouth-set-default-theme -R bookos || :
+fi
+exit 0
+LANGSH
+chmod 755 %{buildroot}/usr/libexec/bookos-plymouth-language
+
+install -dm755 %{buildroot}/usr/lib/systemd/system
+cat > %{buildroot}/usr/lib/systemd/system/bookos-plymouth-language.path <<'UNIT'
+[Unit]
+Description=Vigila el idioma del sistema para el splash de arranque
+
+[Path]
+PathChanged=/etc/locale.conf
+
+[Install]
+WantedBy=paths.target
+UNIT
+cat > %{buildroot}/usr/lib/systemd/system/bookos-plymouth-language.service <<'UNIT'
+[Unit]
+Description=Pone el splash de arranque en el idioma del sistema
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/bookos-plymouth-language --regenerate
+UNIT
+
+# El splash se queda en pantalla hasta que el siguiente toma el KMS: SDDM o, con
+# autologin, bookos-comp. sddm.service va After=plymouth-quit.service, y el
+# `plymouth quit` de Fedora borra la pantalla antes, así que entre el logo y el
+# escritorio quedaba un negro. bookos-desktop pinta el panel en su primer frame
+# precisamente para no tener ese corte al entrar.
+install -dm755 %{buildroot}/usr/lib/systemd/system/plymouth-quit.service.d
+cat > %{buildroot}/usr/lib/systemd/system/plymouth-quit.service.d/10-bookos-retain-splash.conf <<'UNIT'
+[Service]
+ExecStart=
+ExecStart=-/usr/bin/plymouth quit --retain-splash
+UNIT
+
 # Hook de kernel-install: red de seguridad. Con os-release correcto,
 # 20-grub.install ya titula bien las entradas nuevas él solo; este hook cubre el
 # caso de que os-release estuviera revertido al de Fedora en el momento de
@@ -348,6 +419,11 @@ chmod 755 %{buildroot}/usr/lib/kernel/install.d/95-bookos-loaderentry.install
 # systemd-udev, así que aquí solo van los ficheros.
 /usr/libexec/bookos-apply-identity
 /usr/lib/kernel/install.d/95-bookos-loaderentry.install
+/usr/libexec/bookos-plymouth-language
+/usr/lib/systemd/system/bookos-plymouth-language.path
+/usr/lib/systemd/system/bookos-plymouth-language.service
+%dir /usr/lib/systemd/system/plymouth-quit.service.d
+/usr/lib/systemd/system/plymouth-quit.service.d/10-bookos-retain-splash.conf
 /etc/anaconda/profile.d/bookos.conf
 /usr/share/pixmaps/bookos-install.svg
 /usr/share/fonts/bookos-nunito/
@@ -372,7 +448,11 @@ chmod 755 %{buildroot}/usr/lib/kernel/install.d/95-bookos-loaderentry.install
 /usr/share/anaconda/pixmaps/bookos/anaconda-bookos.css
 
 %post
+# Antes del -R: actualizar el paquete deja bookos.script en español, y el
+# initramfs regenerado tiene que llevar ya el idioma del sistema.
+/usr/libexec/bookos-plymouth-language 2>/dev/null || true
 plymouth-set-default-theme bookos -R 2>/dev/null || true
+systemctl enable bookos-plymouth-language.path >/dev/null 2>&1 || true
 gtk-update-icon-cache -f /usr/share/icons/hicolor 2>/dev/null || true
 # Identidad del sistema (os-release + títulos del menú de arranque).
 /usr/libexec/bookos-apply-identity 2>/dev/null || true
@@ -426,6 +506,17 @@ true
 /usr/libexec/bookos-apply-identity 2>/dev/null || true
 
 %changelog
+* Mon Sep 14 2026 BookOS <packages@bookos.es> - 0.6.2-3
+- Splash de arranque nuevo: logo y barra fina; en actualizaciones, una línea
+  con el progreso; al apagar, solo el logo. Se adapta a cualquier resolución.
+- El splash sale en español o inglés según /etc/locale.conf. Lo aplica
+  /usr/libexec/bookos-plymouth-language al instalar el paquete, y
+  bookos-plymouth-language.path lo repite (regenerando el initramfs) cuando
+  cambia el idioma del sistema.
+- El splash sigue en pantalla hasta que SDDM o el compositor de BookOS pintan
+  (plymouth quit --retain-splash): ya no hay un negro entre el logo y el
+  escritorio.
+
 * Sun Sep 13 2026 BookOS <packages@bookos.es> - 0.6.2-2
 - Los fondos se instalan también en /usr/share/wallpapers/BookOS/{Light,Dark},
   que es donde los busca el compositor de bookos-desktop. Con solo el formato

@@ -594,7 +594,10 @@ for LAUNCH in /usr/share/applications/liveinst.desktop /usr/share/applications/a
     DESK=/etc/skel/Desktop
     mkdir -p "$DESK"
     cp -f "$LAUNCH" "$DESK/" 2>/dev/null || true
-    chmod +x "$DESK/$(basename "$LAUNCH")" 2>/dev/null || true
+    # Plasma only offers "Open with…" for a non-executable .desktop file.
+    # Preserve the executable bit explicitly; cp otherwise inherits the mode
+    # of Anaconda's package file (0644).
+    chmod 0755 "$DESK/$(basename "$LAUNCH")" 2>/dev/null || true
     # KDE: mark executable desktop files as trusted to skip the warning
     kwriteconfig6 --file "$DESK/$(basename "$LAUNCH")" --group "Desktop Entry" --key "X-KDE-AuthorizeExecution" "true" 2>/dev/null || true
 done
@@ -715,6 +718,13 @@ early_microcode=yes
 EOF
 
 # El tema lo instala bookos-branding en /usr/share/plymouth/themes/bookos.
+plymouth-set-default-theme bookos || true
+# Plymouth elige escala 2 en paneles de más de 192 ppp (el del Galaxy Book:
+# 2880×1800 en 30×19 cm, ~244 ppp) y amplía al doble cada fotograma del tema,
+# que sale borroso. El tema ya se dimensiona según la altura de la pantalla.
+# Va antes del -R: plymouthd.conf viaja dentro del initramfs.
+grep -q '^DeviceScale=' /etc/plymouth/plymouthd.conf \
+    || sed -i '/^\[Daemon\]/a DeviceScale=1' /etc/plymouth/plymouthd.conf || true
 plymouth-set-default-theme bookos -R || true
 
 # GRUB dice "BookOS", no "Fedora".
@@ -1113,6 +1123,13 @@ if ! id liveuser >/dev/null 2>&1; then
     useradd -m -G wheel,audio,video -c "Live User" liveuser
 fi
 passwd -d liveuser 2>/dev/null || true
+# useradd copies /etc/skel, but make the final live-home permissions explicit.
+# This also repairs images where the launcher package was mode 0644.
+for launcher in /home/liveuser/Desktop/liveinst.desktop /home/liveuser/Desktop/anaconda.desktop; do
+    [ -f "$launcher" ] || continue
+    chmod 0755 "$launcher"
+    chown liveuser:liveuser "$launcher"
+done
 
 # Cleanup
 dnf clean all
@@ -1221,4 +1238,20 @@ grep -qx 'PRETTY_NAME="__BOOKOS_NAME__"' /etc/os-release \
 # entrada UEFI «Fedora» (ver el /.buildstamp del %post de branding).
 grep -qx 'Product=__BOOKOS_NAME__' /.buildstamp \
     || { echo "✗ /.buildstamp no fija Product=__BOOKOS_NAME__ para Anaconda"; exit 1; }
+%end
+
+# Relabel LAST: container builds can inherit the process role unconfined_r.
+# Lorax's ordinary setfiles pass fixes types but preserves that invalid role.
+# The resulting live system rejects udev, D-Bus and SDDM with 203/EXEC when
+# SELinux loads its policy. -F restores the entire context, including the role.
+%post --interpreter=/usr/bin/bash --erroronfail
+set -euo pipefail
+contexts=/etc/selinux/targeted/contexts/files/file_contexts
+test -s "$contexts"
+# Never traverse the container's bind-mounted kernel/runtime filesystems.
+# -m also works when SELinux is disabled in the compose environment.
+setfiles -F -m -e /proc -e /sys -e /dev -e /run "$contexts" /
+matchpathcon -V -f "$contexts" \
+    /etc/ld.so.cache /usr/bin/udevadm /usr/bin/dbus-broker-launch \
+    /usr/lib/systemd/systemd-resolved /usr/bin/sddm
 %end

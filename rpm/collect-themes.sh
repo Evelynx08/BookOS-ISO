@@ -58,7 +58,7 @@ SPLASH="$LOAD_SRC/splash/Splash.qml"
 # Splash.qml references images/logo.png — refresh that too, else the splash keeps
 # the old baked-in logo. The BookOS logo lives at the loading-system root.
 SPLASH_LOGO="$LOAD_SRC/book-os.png"
-[ -f "$SPLASH_LOGO" ] || SPLASH_LOGO="$LOAD_SRC/plymouth/logo.png"
+[ -f "$SPLASH_LOGO" ] || SPLASH_LOGO="$LOAD_SRC/plymouth/logo-640.png"
 if [ -f "$SPLASH" ]; then
     LNF_BASE="${USER_HOME}/.local/share/plasma/look-and-feel"
     found=0

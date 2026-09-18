@@ -1,6 +1,6 @@
 Name:           bookos-desktop
 Version:        0.1.0
-Release:        4%{?dist}
+Release:        6%{?dist}
 Summary:        BookOS Rust Wayland compositor and desktop session
 License:        GPL-3.0-or-later
 URL:            https://github.com/bookos/bookos-desktop
@@ -22,6 +22,10 @@ Requires:       libseat
 Requires:       pipewire
 Requires:       xdg-desktop-portal
 Requires:       xdg-desktop-portal-gtk
+Requires:       /usr/bin/python3
+Requires:       /usr/bin/kwin_wayland
+Requires:       python3-pyside6
+Requires:       fprintd-pam
 BuildArch:      x86_64
 Source0:        bookos-desktop-%{version}.tar.gz
 
@@ -40,6 +44,8 @@ cargo build --release --workspace --package bookos-comp --package bookos-system
 install -Dm755 target/release/bookos-comp %{buildroot}%{_libexecdir}/bookos-comp
 install -Dm755 target/release/bookos-system %{buildroot}%{_libexecdir}/bookos-system
 install -Dm755 session/bookos-session %{buildroot}%{_bindir}/bookos-session
+install -Dm644 session/bookos-recovery.py %{buildroot}%{_libexecdir}/bookos-recovery.py
+install -Dm644 session/bookos-fingerprint.pam %{buildroot}%{_sysconfdir}/pam.d/bookos-fingerprint
 install -Dm644 session/bookos.desktop %{buildroot}%{_datadir}/wayland-sessions/bookos.desktop
 install -Dm644 session/bookos-system.service %{buildroot}%{_prefix}/lib/systemd/user/bookos-system.service
 # Activación por D-Bus: sin este fichero, quien llame a org.bookos.System1
@@ -49,9 +55,11 @@ install -Dm644 session/bookos.portal %{buildroot}%{_datadir}/xdg-desktop-portal/
 install -Dm644 session/bookos-portals.conf %{buildroot}%{_datadir}/xdg-desktop-portal/BookOS-portals.conf
 
 %files
+%config(noreplace) %{_sysconfdir}/pam.d/bookos-fingerprint
 %{_libexecdir}/bookos-comp
 %{_libexecdir}/bookos-system
 %{_bindir}/bookos-session
+%{_libexecdir}/bookos-recovery.py
 %{_datadir}/wayland-sessions/bookos.desktop
 %{_prefix}/lib/systemd/user/bookos-system.service
 %{_datadir}/dbus-1/services/org.bookos.System1.service
@@ -59,6 +67,16 @@ install -Dm644 session/bookos-portals.conf %{buildroot}%{_datadir}/xdg-desktop-p
 %{_datadir}/xdg-desktop-portal/BookOS-portals.conf
 
 %changelog
+* Wed Sep 16 2026 BookOS <packages@bookos.es> - 0.1.0-6
+- Confirmaciones de energía, dock configurable en vivo y actualización de widgets.
+- Servicio biométrico PAM independiente; la contraseña sigue disponible.
+
+* Tue Sep 15 2026 BookOS <packages@bookos.es> - 0.1.0-5
+- Opciones de ventana: siempre encima y traslado entre escritorios y monitores.
+- Supervisor de sesión y diálogo HIG de recuperación independiente, con
+  reintento explícito o entrada a Plasma/GNOME instalado tras un fallo.
+- Incluye el asistente de recuperación y sus dependencias KWin y PySide6.
+
 * Sun Sep 13 2026 BookOS <packages@bookos.es> - 0.1.0-4
 - Cursores: la sesión fija XCURSOR_THEME al primer tema instalado de verdad.
   Sin él, el compositor caía a «BookOS-Dark», que es un tema de iconos y no

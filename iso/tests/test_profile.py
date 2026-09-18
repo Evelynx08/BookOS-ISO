@@ -70,6 +70,14 @@ class ProfileTests(unittest.TestCase):
                 self.assertIn("bookos.conf", raw)
                 self.assertIn("if [ -f /usr/share/wayland-sessions/bookos.desktop ]", raw)
                 self.assertIn("%post --interpreter=/usr/bin/bash --erroronfail", raw)
+                self.assertIn('chmod 0755 "$DESK/$(basename "$LAUNCH")"', raw)
+                self.assertIn('chmod 0755 "$launcher"', raw)
+
+    def test_iso_wrapper_supports_separate_output_directory(self):
+        script = (ROOT / "build-in-podman.sh").read_text()
+        self.assertIn('OUTDIR="${OUTDIR:-$ROOT}"', script)
+        self.assertIn('-v "$OUTDIR":/out', script)
+        self.assertIn('BookOS $CHANNEL $VERSION /out $ALLAPPS', script)
 
     def test_optional_apps_remain_opt_in(self):
         h = profile.validate(profile.render(apps=["bookos-viewer", "bookos-voicerecorder"]))

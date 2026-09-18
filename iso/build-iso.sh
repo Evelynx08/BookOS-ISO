@@ -63,6 +63,8 @@ OPTIONAL_APPS_KS="$(printf '%s\n' $OPTIONAL_APPS)"
 
 # ── Tooling check ─────────────────────────────────────────────────────────
 command -v livemedia-creator >/dev/null || { echo "✗ falta lorax: sudo dnf install lorax-lmc-novirt"; exit 1; }
+# Anaconda calls this in the compose container as well as in the target.
+command -v load_policy >/dev/null || { echo "✗ falta policycoreutils en el entorno de construcción"; exit 1; }
 
 mkdir -p "$WORKDIR" "$WORKDIR/logs" "$WORKDIR/tmp" "$OUTDIR"
 rm -rf "$WORKDIR"/results 2>/dev/null || true
@@ -251,8 +253,11 @@ echo "────────────────────────�
 # del squashfs. En el contenedor podman eso caía en disco del host, pero en una
 # sesión LIVE /var/tmp es el overlay en RAM → el build muere por espacio.
 # Anclarlo bajo WORKDIR cumple la promesa de "WORKDIR = todo el scratch".
+# Keep diagnostics for this compose separate from earlier builds. Lorax can
+# return success despite Anaconda exit-handler or dracut-install failures.
+BUILD_LOGDIR=$(mktemp -d "$WORKDIR/logs/compose-XXXXXXXX")
 livemedia-creator \
-    --logfile "$WORKDIR/logs/livemedia.log" \
+    --logfile "$BUILD_LOGDIR/livemedia.log" \
     --tmp "$WORKDIR/tmp" \
     --make-iso \
     --no-virt \
@@ -267,6 +272,8 @@ livemedia-creator \
     --volid "$VOLID" \
     --compression zstd \
     --compress-arg=-Xcompression-level --compress-arg=15
+
+bash "$SCRIPT_DIR/check-compose-logs.sh" "$BUILD_LOGDIR"
 
 mv "$WORKDIR/results/$ISO_NAME" "$OUTDIR/"
 echo "[✓] $OUTDIR/$ISO_NAME"

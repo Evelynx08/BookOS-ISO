@@ -60,6 +60,17 @@ para otro). Necesita sudo real y acceso a dispositivos loop. Resultado:
 en `.build/compose/`. Cambiar la versión o directorio de salida para cada
 construcción: no se reutilizan imágenes con firmas antiguas.
 
+El último `%post` restaura los contextos SELinux completos con `setfiles -F`
+y verifica ejecutables esenciales. Es necesario al construir en contenedores:
+la 0.6.2 original conservaba el rol de proceso `unconfined_r` en archivos,
+lo que bloqueaba udev, D-Bus y SDDM al arrancar en modo enforcing. Corregir solo
+el tipo de la etiqueta no basta. El contenedor también necesita
+`policycoreutils` para la llamada de Anaconda a `load_policy` al terminar.
+
+Cada construcción guarda sus registros en `.build/compose/logs/compose-*`.
+`check-compose-logs.sh` impide entregar una ISO si faltan los registros o
+contienen errores de Anaconda o dracut, aunque lorax haya devuelto éxito.
+
 El sistema se llama «BookOS» a secas en todas partes (menú del USB, etiqueta
 del volumen, instalador, entrada UEFI y `PRETTY_NAME`); la versión solo va en
 el nombre del fichero y en `VERSION`/Ajustes.

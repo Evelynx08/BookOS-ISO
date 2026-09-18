@@ -31,10 +31,13 @@ ALLAPPS="${3:-N}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"          # …/BookOS-ISO/iso
 ROOT="$(dirname "$SCRIPT_DIR")"                      # …/BookOS-ISO
 WORK="${WORK:-$ROOT/.build/compose}"
+OUTDIR="${OUTDIR:-$ROOT}"
 IMG="${IMG:-registry.fedoraproject.org/fedora:44}"
 [[ "$CHANNEL" =~ ^(stable|beta|dev)$ && "$VERSION" =~ ^[A-Za-z0-9._-]+$ && "$ALLAPPS" =~ ^[SsYyNn]$ ]] \
     || { echo 'Invalid channel, version or optional-app selection'; exit 1; }
 mkdir -p "$WORK"
+mkdir -p "$WORK/tmp"
+mkdir -p "$OUTDIR"
 
 # ── Modo SERVIDOR: sin repo local ──────────────────────────────────────────
 if [ -n "${NO_LOCAL_REPO:-}" ]; then
@@ -42,7 +45,9 @@ if [ -n "${NO_LOCAL_REPO:-}" ]; then
     exec podman run --rm --privileged --network=host --security-opt label=disable \
         -v /dev:/dev \
         -v "$ROOT":/build \
+        -v "$OUTDIR":/out \
         -v "$WORK":/work \
+        -v "$WORK/tmp":/var/tmp \
         -e WORKDIR=/work \
         -e EXTRA_BOOT_ARGS \
         "$IMG" bash -c "
@@ -51,8 +56,8 @@ if [ -n "${NO_LOCAL_REPO:-}" ]; then
             # DESPOJA todas las traducciones de lo que instala anaconda en la
             # ISO (sesion en ingles + instalador sin espanol). Fuera.
             rm -f /etc/rpm/macros.image-language-conf
-            dnf -y install lorax-lmc-novirt util-linux pykickstart xorriso
-            bash /build/iso/build-iso.sh BookOS $CHANNEL $VERSION /build $ALLAPPS
+            dnf -y install lorax-lmc-novirt util-linux pykickstart xorriso policycoreutils
+            bash /build/iso/build-iso.sh BookOS $CHANNEL $VERSION /out $ALLAPPS
         "
 fi
 
@@ -68,15 +73,17 @@ echo ":: modo LOCAL — usando RPMs de $LOCALREPO (sin publicar)"
 exec podman run --rm --privileged --network=host --security-opt label=disable \
         -v /dev:/dev \
     -v "$ROOT":/build \
+    -v "$OUTDIR":/out \
     -v "$LOCALREPO":/localrepo \
     -v "$WORK":/work \
+    -v "$WORK/tmp":/var/tmp \
     -e BOOKOS_LOCAL_REPO=/localrepo \
     -e WORKDIR=/work \
     -e EXTRA_BOOT_ARGS \
     "$IMG" bash -c "
         set -e
         rm -f /etc/rpm/macros.image-language-conf
-        dnf -y install lorax-lmc-novirt createrepo_c util-linux pykickstart xorriso
+        dnf -y install lorax-lmc-novirt createrepo_c util-linux pykickstart xorriso policycoreutils
         createrepo_c --update /localrepo
-        bash /build/iso/build-iso.sh BookOS $CHANNEL $VERSION /build $ALLAPPS
+        bash /build/iso/build-iso.sh BookOS $CHANNEL $VERSION /out $ALLAPPS
     "
